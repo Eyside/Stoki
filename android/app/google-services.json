@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "43747636274",
+    "project_id": "stoki-1d980",
+    "storage_bucket": "stoki-1d980.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:43747636274:android:b0b949a4a32099e096b82b",
+        "android_client_info": {
+          "package_name": "com.example.stoki"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "43747636274-mt5sn5ag1b3i16gnskv1mfilb22tqf20.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDkguF7ZkG0fYu_ol1HjbJ_oTyEAsSKcxM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "43747636274-mt5sn5ag1b3i16gnskv1mfilb22tqf20.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

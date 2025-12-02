@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")  // ← AJOUT FIREBASE
 }
 
 android {
@@ -20,10 +21,11 @@ android {
 
     defaultConfig {
         applicationId = "com.example.stoki"
-        minSdk = flutter.minSdkVersion
+        minSdk = flutter.minSdkVersion  // Firebase nécessite minimum 21
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        multiDexEnabled = true  // ← AJOUT pour Firebase
     }
 
     buildTypes {
@@ -67,4 +69,9 @@ flutter {
     source = "../.."
 }
 
-dependencies {}
+dependencies {
+    // Firebase dépendances (si nécessaires directement)
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation("androidx.multidex:multidex:2.0.1")  // Pour MultiDex
+}

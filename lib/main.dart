@@ -1,6 +1,8 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 import 'providers.dart';
 import 'screens/home_screen.dart';
@@ -11,8 +13,19 @@ import 'screens/shopping_list_screen.dart';
 import 'screens/ingredient_list_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/calorie_tracking_screen.dart';
+import 'screens/profiles_management_screen.dart';
+import 'screens/groups/groups_screen.dart';
+import 'screens/auth/auth_wrapper.dart';
+import 'services/auth_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialiser Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -37,7 +50,9 @@ class MyApp extends StatelessWidget {
           type: BottomNavigationBarType.fixed,
         ),
       ),
-      home: const HomeShell(),
+      // AuthWrapper vérifie si l'utilisateur est connecté
+      home: const AuthWrapper(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -73,6 +88,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       appBar: AppBar(
         title: _getTitle(),
         elevation: 0,
+        actions: [
+          // Icône de notification pour les groupes
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {
+              // TODO: Notifications
+            },
+          ),
+        ],
       ),
       drawer: _buildDrawer(context),
       body: pages[_currentIndex],
@@ -124,6 +148,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   Widget _buildDrawer(BuildContext context) {
     final ingredientRepo = ref.watch(ingredientRepositoryProvider);
+    final authService = AuthService();
+    final user = authService.currentUser;
 
     return Drawer(
       child: ListView(
@@ -137,27 +163,32 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 end: Alignment.bottomRight,
               ),
             ),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 CircleAvatar(
                   radius: 30,
                   backgroundColor: Colors.white,
-                  child: Icon(Icons.person, size: 40, color: Colors.green),
+                  backgroundImage: user?.photoURL != null
+                      ? NetworkImage(user!.photoURL!)
+                      : null,
+                  child: user?.photoURL == null
+                      ? const Icon(Icons.person, size: 40, color: Colors.green)
+                      : null,
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
                 Text(
-                  'Stoki',
-                  style: TextStyle(
+                  user?.displayName ?? 'Stoki',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 Text(
-                  'Gestion intelligente',
-                  style: TextStyle(
+                  user?.email ?? 'Gestion intelligente',
+                  style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 14,
                   ),
@@ -165,6 +196,24 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               ],
             ),
           ),
+
+          // Groupes
+          ListTile(
+            leading: const Icon(Icons.group),
+            title: const Text('Mes groupes'),
+            subtitle: const Text('Partager avec famille & amis'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const GroupsScreen()),
+              );
+            },
+          ),
+
+          const Divider(),
+
+          // Profils
           ListTile(
             leading: const Icon(Icons.person),
             title: const Text('Mon profil'),
@@ -174,6 +223,20 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.people),
+            title: const Text('Gestion des profils'),
+            subtitle: const Text('Créer et gérer plusieurs profils'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ProfilesManagementScreen(),
+                ),
               );
             },
           ),
@@ -189,7 +252,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               );
             },
           ),
+
           const Divider(),
+
+          // Ingrédients
           ListTile(
             leading: const Icon(Icons.eco),
             title: const Text('Ingrédients'),
@@ -204,7 +270,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               );
             },
           ),
+
           const Divider(),
+
+          // Paramètres
           ListTile(
             leading: const Icon(Icons.settings),
             title: const Text('Paramètres'),
@@ -215,6 +284,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               );
             },
           ),
+
+          // À propos
           ListTile(
             leading: const Icon(Icons.info),
             title: const Text('À propos'),
@@ -229,6 +300,41 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   Text('Application de gestion de stocks, recettes et planning de repas.'),
                 ],
               );
+            },
+          ),
+
+          const Divider(),
+
+          // Déconnexion
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('Se déconnecter', style: TextStyle(color: Colors.red)),
+            onTap: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (c) => AlertDialog(
+                  title: const Text('Déconnexion'),
+                  content: const Text('Voulez-vous vraiment vous déconnecter ?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(c, false),
+                      child: const Text('Annuler'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(c, true),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      child: const Text('Déconnexion'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm == true) {
+                await authService.signOut();
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              }
             },
           ),
         ],

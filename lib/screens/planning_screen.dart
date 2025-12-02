@@ -7,6 +7,7 @@ import '../repositories/planning_repository.dart';
 import '../repositories/recette_repository.dart';
 import '../repositories/calorie_tracking_repository.dart';
 import '../repositories/user_profile_repository.dart';
+import '../widgets/eaters_selector.dart';
 
 class PlanningScreen extends ConsumerStatefulWidget {
   const PlanningScreen({super.key});
@@ -226,6 +227,43 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                             color: Colors.black54,
                           ),
                         ),
+                        // Affichage des profils qui mangent
+                        if (planning.eaters != null && planning.eaters!.isNotEmpty)
+                          FutureBuilder<List<UserProfile>>(
+                            future: _profileRepo.getProfilesByIds(
+                              EatersHelper.decodeEaters(planning.eaters),
+                            ),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData) return const SizedBox.shrink();
+
+                              final eaters = snapshot.data!;
+                              if (eaters.isEmpty) return const SizedBox.shrink();
+
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Wrap(
+                                  spacing: 4,
+                                  children: eaters.map((profile) {
+                                    return Tooltip(
+                                      message: profile.name,
+                                      child: CircleAvatar(
+                                        radius: 10,
+                                        backgroundColor: _getProfileColor(profile).withOpacity(0.3),
+                                        child: Text(
+                                          profile.name[0].toUpperCase(),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: _getProfileColor(profile),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              );
+                            },
+                          ),
                       ],
                     ),
                   ),
@@ -284,6 +322,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
 
   Future<void> _addMealDialog(String mealType, String mealName) async {
     final recettes = await _recetteRepo.getAllRecettes();
+    final profiles = await _profileRepo.getAllProfiles();
 
     if (!mounted) return;
 
@@ -298,6 +337,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
 
     Recette? selectedRecette;
     final servingsCtrl = TextEditingController(text: '1');
+    List<int> selectedEaters = [];
 
     final ok = await showDialog<bool>(
       context: context,
@@ -308,6 +348,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Sélection de la recette
                 DropdownButtonFormField<Recette>(
                   value: selectedRecette,
                   hint: const Text('Choisir une recette'),
@@ -325,6 +366,8 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                   onChanged: (v) => setDialogState(() => selectedRecette = v),
                 ),
                 const SizedBox(height: 16),
+
+                // Nombre de portions
                 TextField(
                   controller: servingsCtrl,
                   decoration: const InputDecoration(
@@ -334,6 +377,20 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                   ),
                   keyboardType: TextInputType.number,
                 ),
+
+                // Sélecteur de profils
+                if (profiles.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  EatersSelector(
+                    allProfiles: profiles,
+                    selectedProfileIds: selectedEaters,
+                    onSelectionChanged: (ids) {
+                      setDialogState(() => selectedEaters = ids);
+                    },
+                  ),
+                ],
+
+                // Informations nutritionnelles
                 if (selectedRecette != null) ...[
                   const SizedBox(height: 16),
                   FutureBuilder<Map<String, double>>(
@@ -385,7 +442,6 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     if (ok == true && selectedRecette != null) {
       final servings = int.tryParse(servingsCtrl.text) ?? 1;
 
-      // Créer la date avec l'heure appropriée pour le type de repas
       final mealTime = _getMealTime(mealType);
       final plannedDate = DateTime(
         _selectedDate.year,
@@ -395,11 +451,17 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
         mealTime.minute,
       );
 
+      // Encoder les profils sélectionnés
+      final eatersJson = selectedEaters.isNotEmpty
+          ? EatersHelper.encodeEaters(selectedEaters)
+          : null;
+
       await _planningRepo.addMealToPlanning(
         date: plannedDate,
         mealType: mealType,
         recetteId: selectedRecette!.id,
         servings: servings,
+        eaters: eatersJson,
       );
 
       _refresh();
@@ -469,11 +531,13 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     if (currentRecette == null) return;
 
     final recettes = await _recetteRepo.getAllRecettes();
+    final profiles = await _profileRepo.getAllProfiles();
 
     if (!mounted) return;
 
     Recette? selectedRecette = currentRecette;
     final servingsCtrl = TextEditingController(text: planning.servings.toString());
+    List<int> selectedEaters = EatersHelper.decodeEaters(planning.eaters);
 
     final ok = await showDialog<bool>(
       context: context,
@@ -510,6 +574,16 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                   ),
                   keyboardType: TextInputType.number,
                 ),
+                if (profiles.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  EatersSelector(
+                    allProfiles: profiles,
+                    selectedProfileIds: selectedEaters,
+                    onSelectionChanged: (ids) {
+                      setDialogState(() => selectedEaters = ids);
+                    },
+                  ),
+                ],
                 if (selectedRecette != null) ...[
                   const SizedBox(height: 16),
                   FutureBuilder<Map<String, double>>(
@@ -560,6 +634,9 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
 
     if (ok == true && selectedRecette != null) {
       final newServings = int.tryParse(servingsCtrl.text) ?? 1;
+      final eatersJson = selectedEaters.isNotEmpty
+          ? EatersHelper.encodeEaters(selectedEaters)
+          : null;
 
       // Supprimer l'ancien planning
       await _planningRepo.deletePlanning(planning.id);
@@ -570,6 +647,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
         mealType: planning.mealType,
         recetteId: selectedRecette!.id,
         servings: newServings,
+        eaters: eatersJson,
       );
 
       _refresh();
@@ -680,6 +758,18 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
   String _getDayName(DateTime date) {
     final days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     return days[date.weekday - 1];
+  }
+
+  Color _getProfileColor(UserProfile profile) {
+    if (profile.eaterMultiplier < 0.8) return Colors.blue;
+    if (profile.eaterMultiplier > 1.2) return Colors.purple;
+    return Colors.green;
+  }
+
+  IconData _getProfileIcon(UserProfile profile) {
+    if (profile.sex == 'male') return Icons.person;
+    if (profile.sex == 'female') return Icons.person_outline;
+    return Icons.person;
   }
 }
 
