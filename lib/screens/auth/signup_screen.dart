@@ -32,8 +32,12 @@ class _SignupScreenState extends State<SignupScreen> {
         displayName: _nameCtrl.text.trim(),
       );
 
-      // Pas besoin de naviguer - AuthWrapper le fera automatiquement
-      // grâce au StreamBuilder qui écoute authStateChanges
+      // Succès - retirer le loading et fermer l'écran
+      if (mounted) {
+        setState(() => _isLoading = false);
+        // Retour vers login - AuthWrapper détectera automatiquement la connexion
+        Navigator.pop(context);
+      }
 
     } catch (e) {
       setState(() => _isLoading = false);
@@ -158,9 +162,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       ? const SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                      : const Text('Créer mon compte'),
+                      : const Text('Créer mon compte', style: TextStyle(fontSize: 16)),
                 ),
 
                 const SizedBox(height: 16),

@@ -24,15 +24,20 @@ class GroupService {
         'memberCount': 1,
       });
 
+      print('✅ Groupe créé: ${docRef.id}');
+
       // Ajouter le créateur comme administrateur
       await docRef.collection('members').doc(userId).set({
+        'userId': userId, // IMPORTANT: on stocke l'userId aussi ici
         'role': 'admin',
         'joinedAt': FieldValue.serverTimestamp(),
       });
 
+      print('✅ Membre admin ajouté: $userId');
+
       return docRef.id;
     } catch (e) {
-      print('Erreur création groupe: $e');
+      print('❌ Erreur création groupe: $e');
       return null;
     }
   }
@@ -55,7 +60,6 @@ class GroupService {
       }
 
       final groupDoc = querySnapshot.docs.first;
-      final groupId = groupDoc.id;
 
       // Vérifier si l'utilisateur est déjà membre
       final memberDoc = await groupDoc.reference
@@ -69,6 +73,7 @@ class GroupService {
 
       // Ajouter l'utilisateur comme membre
       await groupDoc.reference.collection('members').doc(userId).set({
+        'userId': userId,
         'role': 'member',
         'joinedAt': FieldValue.serverTimestamp(),
       });
@@ -80,34 +85,91 @@ class GroupService {
 
       return true;
     } catch (e) {
-      print('Erreur rejoindre groupe: $e');
+      print('❌ Erreur rejoindre groupe: $e');
       rethrow;
     }
   }
 
-  // Récupérer les groupes d'un utilisateur
+  // Prévisualiser un groupe avec le code d'invitation (NOUVELLE MÉTHODE)
+  Future<Map<String, dynamic>?> previewGroupByCode(String inviteCode) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('groups')
+          .where('inviteCode', isEqualTo: inviteCode)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        return null;
+      }
+
+      final groupDoc = querySnapshot.docs.first;
+      final data = groupDoc.data();
+
+      return {
+        'id': groupDoc.id,
+        'name': data['name'],
+        'description': data['description'] ?? '',
+        'memberCount': data['memberCount'] ?? 0,
+        'inviteCode': data['inviteCode'],
+      };
+    } catch (e) {
+      print('❌ Erreur preview groupe: $e');
+      return null;
+    }
+  }
+
+  // Récupérer les groupes d'un utilisateur - VERSION CORRIGÉE
   Stream<List<Map<String, dynamic>>> getUserGroups(String userId) {
+    print('🔍 getUserGroups appelé avec userId: $userId');
+
+    // On utilise collectionGroup pour chercher dans toutes les sous-collections 'members'
     return _firestore
         .collectionGroup('members')
-        .where(FieldPath.documentId, isEqualTo: userId)
+        .where('userId', isEqualTo: userId) // CORRECTION: on cherche par userId dans les données
         .snapshots()
         .asyncMap((snapshot) async {
+      print('🔍 Snapshot reçu avec ${snapshot.docs.length} documents');
+
       List<Map<String, dynamic>> groups = [];
 
-      for (var doc in snapshot.docs) {
-        final groupRef = doc.reference.parent.parent!;
-        final groupDoc = await groupRef.get();
+      for (var memberDoc in snapshot.docs) {
+        try {
+          // Le parent.parent nous donne le document du groupe
+          final groupRef = memberDoc.reference.parent.parent;
 
-        if (groupDoc.exists) {
-          final memberData = doc.data();
-          groups.add({
-            'id': groupRef.id,
-            'role': memberData['role'],
-            ...groupDoc.data() as Map<String, dynamic>,
-          });
+          if (groupRef == null) {
+            print('⚠️ groupRef est null pour ${memberDoc.id}');
+            continue;
+          }
+
+          print('🔍 Récupération du groupe: ${groupRef.id}');
+          final groupDoc = await groupRef.get();
+
+          if (groupDoc.exists) {
+            final memberData = memberDoc.data();
+            final groupData = groupDoc.data() as Map<String, dynamic>;
+
+            groups.add({
+              'id': groupRef.id,
+              'role': memberData['role'] ?? 'member',
+              'name': groupData['name'],
+              'description': groupData['description'],
+              'memberCount': groupData['memberCount'],
+              'inviteCode': groupData['inviteCode'],
+              'createdAt': groupData['createdAt'],
+            });
+
+            print('✅ Groupe ajouté: ${groupData['name']}');
+          } else {
+            print('⚠️ Le groupe ${groupRef.id} n\'existe pas');
+          }
+        } catch (e) {
+          print('❌ Erreur traitement document: $e');
         }
       }
 
+      print('✅ Total groupes trouvés: ${groups.length}');
       return groups;
     });
   }
@@ -124,7 +186,7 @@ class GroupService {
         ...doc.data()!,
       };
     } catch (e) {
-      print('Erreur récupération groupe: $e');
+      print('❌ Erreur récupération groupe: $e');
       return null;
     }
   }
@@ -140,7 +202,7 @@ class GroupService {
       List<Map<String, dynamic>> members = [];
 
       for (var doc in snapshot.docs) {
-        final userId = doc.id;
+        final userId = doc.data()['userId'] ?? doc.id;
         final memberData = doc.data();
 
         // Récupérer les infos utilisateur
@@ -200,7 +262,7 @@ class GroupService {
 
       return true;
     } catch (e) {
-      print('Erreur quitter groupe: $e');
+      print('❌ Erreur quitter groupe: $e');
       return false;
     }
   }
@@ -222,7 +284,7 @@ class GroupService {
 
       return true;
     } catch (e) {
-      print('Erreur suppression groupe: $e');
+      print('❌ Erreur suppression groupe: $e');
       rethrow;
     }
   }
@@ -245,7 +307,7 @@ class GroupService {
 
       return true;
     } catch (e) {
-      print('Erreur mise à jour groupe: $e');
+      print('❌ Erreur mise à jour groupe: $e');
       return false;
     }
   }
@@ -268,7 +330,7 @@ class GroupService {
 
       return newCode;
     } catch (e) {
-      print('Erreur régénération code: $e');
+      print('❌ Erreur régénération code: $e');
       return null;
     }
   }

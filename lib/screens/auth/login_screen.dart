@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import 'signup_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -37,6 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (result != null && mounted) {
         // La navigation est gérée automatiquement par AuthWrapper
+        // Le StreamBuilder détectera le changement d'état
       }
     } catch (e) {
       setState(() => _isLoading = false);
@@ -136,7 +138,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
+
+                // Lien "Mot de passe oublié"
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                      );
+                    },
+                    child: const Text('Mot de passe oublié ?'),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
 
                 OutlinedButton.icon(
                   onPressed: _isLoading ? null : _signInWithGoogle,
@@ -150,7 +168,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       'assets/google_logo.png',
                       height: 18,
                       errorBuilder: (context, error, stackTrace) {
-                        // Fallback si l'image n'existe pas
                         return const Icon(Icons.login, size: 20);
                       },
                     ),
