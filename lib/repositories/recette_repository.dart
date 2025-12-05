@@ -16,6 +16,7 @@ class RecetteRepository extends DatabaseAccessor<AppDatabase> {
     int servings = 1,
     String? instructions,
     String? imageUrl,
+    String? category, // NOUVEAU
   }) {
     final companion = RecettesCompanion(
       name: Value(name),
@@ -23,6 +24,7 @@ class RecetteRepository extends DatabaseAccessor<AppDatabase> {
       servings: Value(servings),
       instructions: Value(instructions),
       imageUrl: Value(imageUrl),
+      category: Value(category), // NOUVEAU
     );
     return into(db.recettes).insert(companion);
   }
@@ -130,6 +132,7 @@ class RecetteRepository extends DatabaseAccessor<AppDatabase> {
       servings: original.servings,
       instructions: original.instructions,
       imageUrl: original.imageUrl,
+      category: original.category, // NOUVEAU
     );
 
     final ingredients = await getIngredientsForRecette(recetteId);
@@ -154,6 +157,7 @@ class RecetteRepository extends DatabaseAccessor<AppDatabase> {
     int? servings,
     String? instructions,
     String? imageUrl,
+    String? category, // NOUVEAU
   }) {
     return (update(db.recettes)..where((t) => t.id.equals(id))).write(
       RecettesCompanion(
@@ -162,6 +166,7 @@ class RecetteRepository extends DatabaseAccessor<AppDatabase> {
         servings: servings != null ? Value(servings) : const Value.absent(),
         instructions: instructions != null ? Value(instructions) : const Value.absent(),
         imageUrl: imageUrl != null ? Value(imageUrl) : const Value.absent(),
+        category: category != null ? Value(category) : const Value.absent(), // NOUVEAU
       ),
     );
   }

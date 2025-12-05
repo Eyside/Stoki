@@ -61,6 +61,7 @@ class Recettes extends Table {
   IntColumn get servings => integer().withDefault(const Constant(1))();
   TextColumn get notes => text().nullable()();
   TextColumn get imageUrl => text().nullable()(); // pour photo de la recette
+  TextColumn get category => text().nullable()(); // NOUVEAU: Catégorie de recette
 
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
@@ -226,7 +227,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4; // CHANGÉ: 3 -> 4
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -264,6 +265,15 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(calorieTracking);
         } catch (e) {
           print('Migration error: $e');
+        }
+      }
+
+      // Migration de la version 3 vers 4 (ajout category aux recettes) - NOUVEAU
+      if (from <= 3) {
+        try {
+          await m.addColumn(recettes, recettes.category);
+        } catch (e) {
+          print('Migration error v4: $e');
         }
       }
     },

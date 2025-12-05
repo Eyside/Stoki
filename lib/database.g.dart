@@ -1160,6 +1160,12 @@ class $RecettesTable extends Recettes with TableInfo<$RecettesTable, Recette> {
   late final GeneratedColumn<String> imageUrl = GeneratedColumn<String>(
       'image_url', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _categoryMeta =
+      const VerificationMeta('category');
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+      'category', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -1170,7 +1176,7 @@ class $RecettesTable extends Recettes with TableInfo<$RecettesTable, Recette> {
       defaultValue: currentDateAndTime);
   @override
   List<GeneratedColumn> get $columns =>
-      [id, name, instructions, servings, notes, imageUrl, createdAt];
+      [id, name, instructions, servings, notes, imageUrl, category, createdAt];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1208,6 +1214,10 @@ class $RecettesTable extends Recettes with TableInfo<$RecettesTable, Recette> {
       context.handle(_imageUrlMeta,
           imageUrl.isAcceptableOrUnknown(data['image_url']!, _imageUrlMeta));
     }
+    if (data.containsKey('category')) {
+      context.handle(_categoryMeta,
+          category.isAcceptableOrUnknown(data['category']!, _categoryMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -1233,6 +1243,8 @@ class $RecettesTable extends Recettes with TableInfo<$RecettesTable, Recette> {
           .read(DriftSqlType.string, data['${effectivePrefix}notes']),
       imageUrl: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}image_url']),
+      category: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}category']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -1251,6 +1263,7 @@ class Recette extends DataClass implements Insertable<Recette> {
   final int servings;
   final String? notes;
   final String? imageUrl;
+  final String? category;
   final DateTime createdAt;
   const Recette(
       {required this.id,
@@ -1259,6 +1272,7 @@ class Recette extends DataClass implements Insertable<Recette> {
       required this.servings,
       this.notes,
       this.imageUrl,
+      this.category,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1274,6 +1288,9 @@ class Recette extends DataClass implements Insertable<Recette> {
     }
     if (!nullToAbsent || imageUrl != null) {
       map['image_url'] = Variable<String>(imageUrl);
+    }
+    if (!nullToAbsent || category != null) {
+      map['category'] = Variable<String>(category);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -1292,6 +1309,9 @@ class Recette extends DataClass implements Insertable<Recette> {
       imageUrl: imageUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(imageUrl),
+      category: category == null && nullToAbsent
+          ? const Value.absent()
+          : Value(category),
       createdAt: Value(createdAt),
     );
   }
@@ -1306,6 +1326,7 @@ class Recette extends DataClass implements Insertable<Recette> {
       servings: serializer.fromJson<int>(json['servings']),
       notes: serializer.fromJson<String?>(json['notes']),
       imageUrl: serializer.fromJson<String?>(json['imageUrl']),
+      category: serializer.fromJson<String?>(json['category']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -1319,6 +1340,7 @@ class Recette extends DataClass implements Insertable<Recette> {
       'servings': serializer.toJson<int>(servings),
       'notes': serializer.toJson<String?>(notes),
       'imageUrl': serializer.toJson<String?>(imageUrl),
+      'category': serializer.toJson<String?>(category),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -1330,6 +1352,7 @@ class Recette extends DataClass implements Insertable<Recette> {
           int? servings,
           Value<String?> notes = const Value.absent(),
           Value<String?> imageUrl = const Value.absent(),
+          Value<String?> category = const Value.absent(),
           DateTime? createdAt}) =>
       Recette(
         id: id ?? this.id,
@@ -1339,6 +1362,7 @@ class Recette extends DataClass implements Insertable<Recette> {
         servings: servings ?? this.servings,
         notes: notes.present ? notes.value : this.notes,
         imageUrl: imageUrl.present ? imageUrl.value : this.imageUrl,
+        category: category.present ? category.value : this.category,
         createdAt: createdAt ?? this.createdAt,
       );
   Recette copyWithCompanion(RecettesCompanion data) {
@@ -1351,6 +1375,7 @@ class Recette extends DataClass implements Insertable<Recette> {
       servings: data.servings.present ? data.servings.value : this.servings,
       notes: data.notes.present ? data.notes.value : this.notes,
       imageUrl: data.imageUrl.present ? data.imageUrl.value : this.imageUrl,
+      category: data.category.present ? data.category.value : this.category,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1364,14 +1389,15 @@ class Recette extends DataClass implements Insertable<Recette> {
           ..write('servings: $servings, ')
           ..write('notes: $notes, ')
           ..write('imageUrl: $imageUrl, ')
+          ..write('category: $category, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, instructions, servings, notes, imageUrl, createdAt);
+  int get hashCode => Object.hash(
+      id, name, instructions, servings, notes, imageUrl, category, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1382,6 +1408,7 @@ class Recette extends DataClass implements Insertable<Recette> {
           other.servings == this.servings &&
           other.notes == this.notes &&
           other.imageUrl == this.imageUrl &&
+          other.category == this.category &&
           other.createdAt == this.createdAt);
 }
 
@@ -1392,6 +1419,7 @@ class RecettesCompanion extends UpdateCompanion<Recette> {
   final Value<int> servings;
   final Value<String?> notes;
   final Value<String?> imageUrl;
+  final Value<String?> category;
   final Value<DateTime> createdAt;
   const RecettesCompanion({
     this.id = const Value.absent(),
@@ -1400,6 +1428,7 @@ class RecettesCompanion extends UpdateCompanion<Recette> {
     this.servings = const Value.absent(),
     this.notes = const Value.absent(),
     this.imageUrl = const Value.absent(),
+    this.category = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   RecettesCompanion.insert({
@@ -1409,6 +1438,7 @@ class RecettesCompanion extends UpdateCompanion<Recette> {
     this.servings = const Value.absent(),
     this.notes = const Value.absent(),
     this.imageUrl = const Value.absent(),
+    this.category = const Value.absent(),
     this.createdAt = const Value.absent(),
   }) : name = Value(name);
   static Insertable<Recette> custom({
@@ -1418,6 +1448,7 @@ class RecettesCompanion extends UpdateCompanion<Recette> {
     Expression<int>? servings,
     Expression<String>? notes,
     Expression<String>? imageUrl,
+    Expression<String>? category,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -1427,6 +1458,7 @@ class RecettesCompanion extends UpdateCompanion<Recette> {
       if (servings != null) 'servings': servings,
       if (notes != null) 'notes': notes,
       if (imageUrl != null) 'image_url': imageUrl,
+      if (category != null) 'category': category,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -1438,6 +1470,7 @@ class RecettesCompanion extends UpdateCompanion<Recette> {
       Value<int>? servings,
       Value<String?>? notes,
       Value<String?>? imageUrl,
+      Value<String?>? category,
       Value<DateTime>? createdAt}) {
     return RecettesCompanion(
       id: id ?? this.id,
@@ -1446,6 +1479,7 @@ class RecettesCompanion extends UpdateCompanion<Recette> {
       servings: servings ?? this.servings,
       notes: notes ?? this.notes,
       imageUrl: imageUrl ?? this.imageUrl,
+      category: category ?? this.category,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -1471,6 +1505,9 @@ class RecettesCompanion extends UpdateCompanion<Recette> {
     if (imageUrl.present) {
       map['image_url'] = Variable<String>(imageUrl.value);
     }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1486,6 +1523,7 @@ class RecettesCompanion extends UpdateCompanion<Recette> {
           ..write('servings: $servings, ')
           ..write('notes: $notes, ')
           ..write('imageUrl: $imageUrl, ')
+          ..write('category: $category, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -5684,6 +5722,7 @@ typedef $$RecettesTableCreateCompanionBuilder = RecettesCompanion Function({
   Value<int> servings,
   Value<String?> notes,
   Value<String?> imageUrl,
+  Value<String?> category,
   Value<DateTime> createdAt,
 });
 typedef $$RecettesTableUpdateCompanionBuilder = RecettesCompanion Function({
@@ -5693,6 +5732,7 @@ typedef $$RecettesTableUpdateCompanionBuilder = RecettesCompanion Function({
   Value<int> servings,
   Value<String?> notes,
   Value<String?> imageUrl,
+  Value<String?> category,
   Value<DateTime> createdAt,
 });
 
@@ -5759,6 +5799,9 @@ class $$RecettesTableFilterComposer
 
   ColumnFilters<String> get imageUrl => $composableBuilder(
       column: $table.imageUrl, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get category => $composableBuilder(
+      column: $table.category, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -5834,6 +5877,9 @@ class $$RecettesTableOrderingComposer
   ColumnOrderings<String> get imageUrl => $composableBuilder(
       column: $table.imageUrl, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get category => $composableBuilder(
+      column: $table.category, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
@@ -5864,6 +5910,9 @@ class $$RecettesTableAnnotationComposer
 
   GeneratedColumn<String> get imageUrl =>
       $composableBuilder(column: $table.imageUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5942,6 +5991,7 @@ class $$RecettesTableTableManager extends RootTableManager<
             Value<int> servings = const Value.absent(),
             Value<String?> notes = const Value.absent(),
             Value<String?> imageUrl = const Value.absent(),
+            Value<String?> category = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               RecettesCompanion(
@@ -5951,6 +6001,7 @@ class $$RecettesTableTableManager extends RootTableManager<
             servings: servings,
             notes: notes,
             imageUrl: imageUrl,
+            category: category,
             createdAt: createdAt,
           ),
           createCompanionCallback: ({
@@ -5960,6 +6011,7 @@ class $$RecettesTableTableManager extends RootTableManager<
             Value<int> servings = const Value.absent(),
             Value<String?> notes = const Value.absent(),
             Value<String?> imageUrl = const Value.absent(),
+            Value<String?> category = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               RecettesCompanion.insert(
@@ -5969,6 +6021,7 @@ class $$RecettesTableTableManager extends RootTableManager<
             servings: servings,
             notes: notes,
             imageUrl: imageUrl,
+            category: category,
             createdAt: createdAt,
           ),
           withReferenceMapper: (p0) => p0
