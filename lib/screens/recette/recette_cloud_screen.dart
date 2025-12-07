@@ -1,9 +1,11 @@
 // lib/screens/recette/recette_cloud_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/recette_firestore.dart';
 import '../../services/recette_firestore_service.dart';
 import '../../services/group_service.dart';
 import '../../services/auth_service.dart';
+import '../../providers.dart';
 import 'recette_firestore_form.dart';
 import 'recette_firestore_detail.dart';
 
@@ -14,14 +16,14 @@ enum RecetteFilter {
   group,    // Seulement de groupe
 }
 
-class RecetteCloudScreen extends StatefulWidget {
+class RecetteCloudScreen extends ConsumerStatefulWidget {
   const RecetteCloudScreen({super.key});
 
   @override
-  State<RecetteCloudScreen> createState() => _RecetteCloudScreenState();
+  ConsumerState<RecetteCloudScreen> createState() => _RecetteCloudScreenState();
 }
 
-class _RecetteCloudScreenState extends State<RecetteCloudScreen> {
+class _RecetteCloudScreenState extends ConsumerState<RecetteCloudScreen> {
   final _recetteService = RecetteFirestoreService();
   final _groupService = GroupService();
   final _authService = AuthService();
@@ -49,10 +51,15 @@ class _RecetteCloudScreenState extends State<RecetteCloudScreen> {
   }
 
   void _openForm([RecetteFirestore? recette]) async {
+    final ingredientRepo = ref.read(ingredientRepositoryProvider);
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => RecetteFirestoreForm(recette: recette),
+        builder: (_) => RecetteFirestoreForm(
+          recette: recette,
+          ingredientRepository: ingredientRepo,
+        ),
       ),
     );
 

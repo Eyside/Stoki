@@ -7,8 +7,7 @@ import 'firebase_options.dart';
 import 'providers.dart';
 import 'screens/home_screen.dart';
 import 'screens/frigo_screen.dart';
-import 'screens/recette/recette_screen.dart';
-import 'screens/recette/recette_cloud_screen.dart'; // NOUVEAU
+import 'screens/recette/recette_unified_screen.dart'; // ← NOUVEAU au lieu de recette_screen.dartimport 'screens/recette/recette_cloud_screen.dart'; // NOUVEAU
 import 'screens/planning_screen.dart';
 import 'screens/shopping_list_screen.dart';
 import 'screens/ingredient_list_screen.dart';
@@ -80,8 +79,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         frigoRepository: frigoRepo,
         ingredientRepository: ingredientRepo,
       ),
-      RecetteScreen(recetteRepository: recetteRepo),
-      const PlanningScreen(), // Planning repas
+      RecetteUnifiedScreen(recetteRepository: recetteRepo),      const PlanningScreen(), // Planning repas
       const ShoppingListScreen(), // Liste de courses
     ];
 
@@ -208,22 +206,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const GroupsScreen()),
-              );
-            },
-          ),
-
-          const Divider(),
-
-          // NOUVEAU: Recettes Cloud
-          ListTile(
-            leading: const Icon(Icons.cloud),
-            title: const Text('Recettes Cloud'),
-            subtitle: const Text('Recettes partagées & de groupe'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const RecetteCloudScreen()),
               );
             },
           ),
