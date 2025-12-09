@@ -47,6 +47,9 @@ dependencies:
   # ---- UI ----
   cupertino_icons: ^1.0.8
 
+  #----calendar----
+  table_calendar: ^3.0.9
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
