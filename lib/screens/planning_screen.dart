@@ -18,20 +18,6 @@ class PlanningScreen extends ConsumerStatefulWidget {
 
 class _PlanningScreenState extends ConsumerState<PlanningScreen> {
   DateTime _selectedDate = DateTime.now();
-  late PlanningRepository _planningRepo;
-  late RecetteRepository _recetteRepo;
-  late CalorieTrackingRepository _trackingRepo;
-  late UserProfileRepository _profileRepo;
-
-  @override
-  void initState() {
-    super.initState();
-    final db = ref.read(databaseProvider);
-    _planningRepo = PlanningRepository(db);
-    _recetteRepo = ref.read(recetteRepositoryProvider);
-    _trackingRepo = CalorieTrackingRepository(db);
-    _profileRepo = UserProfileRepository(db);
-  }
 
   void _refresh() {
     setState(() {});
@@ -39,6 +25,11 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Déplacer les repositories ici pour éviter les problèmes de contexte
+    final db = ref.watch(databaseProvider);
+    final planningRepo = PlanningRepository(db);
+    final recetteRepo = ref.watch(recetteRepositoryProvider);
+
     return Scaffold(
       body: Column(
         children: [
@@ -109,7 +100,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
           // Liste des repas
           Expanded(
             child: FutureBuilder<List<MealPlanningData>>(
-              future: _planningRepo.getPlanningForDate(_selectedDate),
+              future: planningRepo.getPlanningForDate(_selectedDate),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -120,13 +111,13 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                 return ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   children: [
-                    _buildMealSection('breakfast', 'Petit-déjeuner', Icons.free_breakfast, Colors.orange, plannings),
+                    _buildMealSection('breakfast', 'Petit-déjeuner', Icons.free_breakfast, Colors.orange, plannings, recetteRepo),
                     const SizedBox(height: 12),
-                    _buildMealSection('lunch', 'Déjeuner', Icons.lunch_dining, Colors.green, plannings),
+                    _buildMealSection('lunch', 'Déjeuner', Icons.lunch_dining, Colors.green, plannings, recetteRepo),
                     const SizedBox(height: 12),
-                    _buildMealSection('dinner', 'Dîner', Icons.dinner_dining, Colors.blue, plannings),
+                    _buildMealSection('dinner', 'Dîner', Icons.dinner_dining, Colors.blue, plannings, recetteRepo),
                     const SizedBox(height: 12),
-                    _buildMealSection('snack', 'Collation', Icons.cookie, Colors.purple, plannings),
+                    _buildMealSection('snack', 'Collation', Icons.cookie, Colors.purple, plannings, recetteRepo),
                     const SizedBox(height: 80), // Pour le FAB
                   ],
                 );
@@ -154,6 +145,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
       IconData icon,
       Color color,
       List<MealPlanningData> allPlannings,
+      RecetteRepository recetteRepo,
       ) {
     final mealsOfType = allPlannings.where((p) => p.mealType == mealType).toList();
 
@@ -169,7 +161,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
 
     return Column(
       children: mealsOfType.map((planning) {
-        return _buildPlannedMealCard(planning, mealName, icon, color);
+        return _buildPlannedMealCard(planning, mealName, icon, color, recetteRepo);
       }).toList(),
     );
   }
@@ -179,15 +171,16 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
       String mealName,
       IconData icon,
       Color color,
+      RecetteRepository recetteRepo,
       ) {
     return FutureBuilder<Recette?>(
-      future: _recetteRepo.getRecetteById(planning.recetteId ?? 0),
+      future: recetteRepo.getRecetteById(planning.recetteId ?? 0),
       builder: (context, snapshot) {
         final recette = snapshot.data;
 
         return Card(
           child: InkWell(
-            onTap: () => _showMealDetails(planning, recette),
+            onTap: () => _showMealDetails(planning, recette, recetteRepo),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -196,7 +189,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
+                      color: color.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(icon, color: color, size: 28),
@@ -229,41 +222,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                         ),
                         // Affichage des profils qui mangent
                         if (planning.eaters != null && planning.eaters!.isNotEmpty)
-                          FutureBuilder<List<UserProfile>>(
-                            future: _profileRepo.getProfilesByIds(
-                              EatersHelper.decodeEaters(planning.eaters),
-                            ),
-                            builder: (context, snapshot) {
-                              if (!snapshot.hasData) return const SizedBox.shrink();
-
-                              final eaters = snapshot.data!;
-                              if (eaters.isEmpty) return const SizedBox.shrink();
-
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Wrap(
-                                  spacing: 4,
-                                  children: eaters.map((profile) {
-                                    return Tooltip(
-                                      message: profile.name,
-                                      child: CircleAvatar(
-                                        radius: 10,
-                                        backgroundColor: _getProfileColor(profile).withOpacity(0.3),
-                                        child: Text(
-                                          profile.name[0].toUpperCase(),
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: _getProfileColor(profile),
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              );
-                            },
-                          ),
+                          _buildEatersDisplay(planning.eaters!),
                       ],
                     ),
                   ),
@@ -303,7 +262,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                     ],
                     onSelected: (value) {
                       if (value == 'consume') {
-                        _markAsConsumed(planning, recette);
+                        _markAsConsumed(planning, recette, recetteRepo);
                       } else if (value == 'edit') {
                         _editMeal(planning, recette);
                       } else if (value == 'delete') {
@@ -320,9 +279,56 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     );
   }
 
+  Widget _buildEatersDisplay(String eatersJson) {
+    final db = ref.watch(databaseProvider);
+    final profileRepo = UserProfileRepository(db);
+
+    return FutureBuilder<List<UserProfile>>(
+      future: profileRepo.getProfilesByIds(
+        EatersHelper.decodeEaters(eatersJson),
+      ),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+
+        final eaters = snapshot.data!;
+        if (eaters.isEmpty) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Wrap(
+            spacing: 4,
+            children: eaters.map((profile) {
+              return Tooltip(
+                message: profile.name,
+                child: CircleAvatar(
+                  radius: 10,
+                  backgroundColor: _getProfileColor(profile).withOpacity(0.3),
+                  child: Text(
+                    profile.name[0].toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: _getProfileColor(profile),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _addMealDialog(String mealType, String mealName) async {
-    final recettes = await _recetteRepo.getAllRecettes();
-    final profiles = await _profileRepo.getAllProfiles();
+    // Récupérer les repositories dans le contexte actuel
+    final db = ref.read(databaseProvider);
+    final recetteRepo = ref.read(recetteRepositoryProvider);
+    final profileRepo = UserProfileRepository(db);
+    final planningRepo = PlanningRepository(db);
+
+    final recettes = await recetteRepo.getAllRecettes();
+    final profiles = await profileRepo.getAllProfiles();
 
     if (!mounted) return;
 
@@ -341,97 +347,102 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c2, setDialogState) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (builderContext, setDialogState) => AlertDialog(
           title: Text('Planifier $mealName'),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Sélection de la recette
-                DropdownButtonFormField<Recette>(
-                  value: selectedRecette,
-                  hint: const Text('Choisir une recette'),
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.restaurant_menu),
-                  ),
-                  isExpanded: true,
-                  items: recettes.map((r) {
-                    return DropdownMenuItem(
-                      value: r,
-                      child: Text(r.name),
-                    );
-                  }).toList(),
-                  onChanged: (v) => setDialogState(() => selectedRecette = v),
-                ),
-                const SizedBox(height: 16),
-
-                // Nombre de portions
-                TextField(
-                  controller: servingsCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Nombre de portions',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.people),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-
-                // Sélecteur de profils
-                if (profiles.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  EatersSelector(
-                    allProfiles: profiles,
-                    selectedProfileIds: selectedEaters,
-                    onSelectionChanged: (ids) {
-                      setDialogState(() => selectedEaters = ids);
-                    },
-                  ),
-                ],
-
-                // Informations nutritionnelles
-                if (selectedRecette != null) ...[
-                  const SizedBox(height: 16),
-                  FutureBuilder<Map<String, double>>(
-                    future: _recetteRepo.calculateNutritionForRecette(selectedRecette!.id),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox.shrink();
-
-                      final nutrition = snapshot.data!;
-                      final servings = int.tryParse(servingsCtrl.text) ?? 1;
-                      final caloriesPerServing = (nutrition['calories'] ?? 0) / selectedRecette!.servings * servings;
-
-                      return Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          children: [
-                            const Text(
-                              'Valeurs nutritionnelles',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            Text('${caloriesPerServing.toStringAsFixed(0)} kcal'),
-                          ],
-                        ),
+            child: SizedBox(
+              width: MediaQuery.of(dialogContext).size.width * 0.9,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Sélection de la recette
+                  DropdownButtonFormField<Recette>(
+                    value: selectedRecette,
+                    hint: const Text('Choisir une recette'),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.restaurant_menu),
+                    ),
+                    isExpanded: true,
+                    items: recettes.map((r) {
+                      return DropdownMenuItem(
+                        value: r,
+                        child: Text(r.name),
                       );
-                    },
+                    }).toList(),
+                    onChanged: (v) => setDialogState(() => selectedRecette = v),
                   ),
+                  const SizedBox(height: 16),
+
+                  // Nombre de portions
+                  TextField(
+                    controller: servingsCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Nombre de portions',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.people),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+
+                  // Sélecteur de profils
+                  if (profiles.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    EatersSelector(
+                      allProfiles: profiles,
+                      selectedProfileIds: selectedEaters,
+                      onSelectionChanged: (ids) {
+                        setDialogState(() => selectedEaters = ids);
+                      },
+                    ),
+                  ],
+
+                  // Informations nutritionnelles
+                  if (selectedRecette != null) ...[
+                    const SizedBox(height: 16),
+                    FutureBuilder<Map<String, double>>(
+                      future: recetteRepo.calculateNutritionForRecette(selectedRecette!.id),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return const SizedBox.shrink();
+
+                        final nutrition = snapshot.data!;
+                        final servings = int.tryParse(servingsCtrl.text) ?? 1;
+                        final caloriesPerServing = (nutrition['calories'] ?? 0) / selectedRecette!.servings * servings;
+
+                        return Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'Valeurs nutritionnelles',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 8),
+                              Text('${caloriesPerServing.toStringAsFixed(0)} kcal'),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(c, false),
+              onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Annuler'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(c, true),
+              onPressed: selectedRecette == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
               child: const Text('Ajouter'),
             ),
           ],
@@ -456,7 +467,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
           ? EatersHelper.encodeEaters(selectedEaters)
           : null;
 
-      await _planningRepo.addMealToPlanning(
+      await planningRepo.addMealToPlanning(
         date: plannedDate,
         mealType: mealType,
         recetteId: selectedRecette!.id,
@@ -489,10 +500,10 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     }
   }
 
-  Future<void> _showMealDetails(MealPlanningData planning, Recette? recette) async {
+  Future<void> _showMealDetails(MealPlanningData planning, Recette? recette, RecetteRepository recetteRepo) async {
     if (recette == null) return;
 
-    final nutrition = await _recetteRepo.calculateNutritionForRecette(recette.id);
+    final nutrition = await recetteRepo.calculateNutritionForRecette(recette.id);
 
     if (!mounted) return;
 
@@ -526,12 +537,16 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
       ),
     );
   }
-
   Future<void> _editMeal(MealPlanningData planning, Recette? currentRecette) async {
     if (currentRecette == null) return;
 
-    final recettes = await _recetteRepo.getAllRecettes();
-    final profiles = await _profileRepo.getAllProfiles();
+    final db = ref.read(databaseProvider);
+    final recetteRepo = ref.read(recetteRepositoryProvider);
+    final profileRepo = UserProfileRepository(db);
+    final planningRepo = PlanningRepository(db);
+
+    final recettes = await recetteRepo.getAllRecettes();
+    final profiles = await profileRepo.getAllProfiles();
 
     if (!mounted) return;
 
@@ -541,90 +556,95 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c2, setDialogState) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (builderContext, setDialogState) => AlertDialog(
           title: const Text('Modifier le repas'),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<Recette>(
-                  value: selectedRecette,
-                  hint: const Text('Choisir une recette'),
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.restaurant_menu),
-                  ),
-                  isExpanded: true,
-                  items: recettes.map((r) {
-                    return DropdownMenuItem(
-                      value: r,
-                      child: Text(r.name),
-                    );
-                  }).toList(),
-                  onChanged: (v) => setDialogState(() => selectedRecette = v),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: servingsCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Nombre de portions',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.people),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                if (profiles.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  EatersSelector(
-                    allProfiles: profiles,
-                    selectedProfileIds: selectedEaters,
-                    onSelectionChanged: (ids) {
-                      setDialogState(() => selectedEaters = ids);
-                    },
-                  ),
-                ],
-                if (selectedRecette != null) ...[
-                  const SizedBox(height: 16),
-                  FutureBuilder<Map<String, double>>(
-                    future: _recetteRepo.calculateNutritionForRecette(selectedRecette!.id),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox.shrink();
-
-                      final nutrition = snapshot.data!;
-                      final servings = int.tryParse(servingsCtrl.text) ?? 1;
-                      final caloriesPerServing = (nutrition['calories'] ?? 0) / selectedRecette!.servings * servings;
-
-                      return Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          children: [
-                            const Text(
-                              'Valeurs nutritionnelles',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            Text('${caloriesPerServing.toStringAsFixed(0)} kcal'),
-                          ],
-                        ),
+            child: SizedBox(
+              width: MediaQuery.of(dialogContext).size.width * 0.9,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<Recette>(
+                    value: selectedRecette,
+                    hint: const Text('Choisir une recette'),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.restaurant_menu),
+                    ),
+                    isExpanded: true,
+                    items: recettes.map((r) {
+                      return DropdownMenuItem(
+                        value: r,
+                        child: Text(r.name),
                       );
-                    },
+                    }).toList(),
+                    onChanged: (v) => setDialogState(() => selectedRecette = v),
                   ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: servingsCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Nombre de portions',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.people),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  if (profiles.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    EatersSelector(
+                      allProfiles: profiles,
+                      selectedProfileIds: selectedEaters,
+                      onSelectionChanged: (ids) {
+                        setDialogState(() => selectedEaters = ids);
+                      },
+                    ),
+                  ],
+                  if (selectedRecette != null) ...[
+                    const SizedBox(height: 16),
+                    FutureBuilder<Map<String, double>>(
+                      future: recetteRepo.calculateNutritionForRecette(selectedRecette!.id),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return const SizedBox.shrink();
+
+                        final nutrition = snapshot.data!;
+                        final servings = int.tryParse(servingsCtrl.text) ?? 1;
+                        final caloriesPerServing = (nutrition['calories'] ?? 0) / selectedRecette!.servings * servings;
+
+                        return Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'Valeurs nutritionnelles',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 8),
+                              Text('${caloriesPerServing.toStringAsFixed(0)} kcal'),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(c, false),
+              onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Annuler'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(c, true),
+              onPressed: selectedRecette == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
               child: const Text('Modifier'),
             ),
           ],
@@ -639,10 +659,10 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
           : null;
 
       // Supprimer l'ancien planning
-      await _planningRepo.deletePlanning(planning.id);
+      await planningRepo.deletePlanning(planning.id);
 
       // Créer le nouveau planning
-      await _planningRepo.addMealToPlanning(
+      await planningRepo.addMealToPlanning(
         date: planning.date,
         mealType: planning.mealType,
         recetteId: selectedRecette!.id,
@@ -661,6 +681,9 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
   }
 
   Future<void> _deleteMeal(MealPlanningData planning) async {
+    final db = ref.read(databaseProvider);
+    final planningRepo = PlanningRepository(db);
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -681,7 +704,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     );
 
     if (confirm == true) {
-      await _planningRepo.deletePlanning(planning.id);
+      await planningRepo.deletePlanning(planning.id);
       _refresh();
 
       if (mounted) {
@@ -692,10 +715,14 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     }
   }
 
-  Future<void> _markAsConsumed(MealPlanningData planning, Recette? recette) async {
+  Future<void> _markAsConsumed(MealPlanningData planning, Recette? recette, RecetteRepository recetteRepo) async {
     if (recette == null) return;
 
-    final profile = await _profileRepo.getActiveProfile();
+    final db = ref.read(databaseProvider);
+    final profileRepo = UserProfileRepository(db);
+    final trackingRepo = CalorieTrackingRepository(db);
+
+    final profile = await profileRepo.getActiveProfile();
 
     if (profile == null) {
       if (!mounted) return;
@@ -708,7 +735,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     }
 
     // Calculer les valeurs nutritionnelles
-    final nutrition = await _recetteRepo.calculateNutritionForRecette(recette.id);
+    final nutrition = await recetteRepo.calculateNutritionForRecette(recette.id);
     final portionFactor = planning.servings / recette.servings;
 
     final calories = (nutrition['calories'] ?? 0) * portionFactor;
@@ -718,7 +745,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     final fibers = (nutrition['fibers'] ?? 0) * portionFactor;
 
     // Enregistrer dans le suivi calorique
-    await _trackingRepo.addTracking(
+    await trackingRepo.addTracking(
       userProfileId: profile.id,
       date: planning.date,
       mealType: planning.mealType,
@@ -765,12 +792,6 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
     if (profile.eaterMultiplier > 1.2) return Colors.purple;
     return Colors.green;
   }
-
-  IconData _getProfileIcon(UserProfile profile) {
-    if (profile.sex == 'male') return Icons.person;
-    if (profile.sex == 'female') return Icons.person_outline;
-    return Icons.person;
-  }
 }
 
 class _MealCard extends StatelessWidget {
@@ -801,7 +822,7 @@ class _MealCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
+                  color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color, size: 28),
@@ -839,5 +860,17 @@ class _MealCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// Classe helper pour encoder/décoder les profils
+class EatersHelper {
+  static String encodeEaters(List<int> profileIds) {
+    return profileIds.join(',');
+  }
+
+  static List<int> decodeEaters(String? eatersJson) {
+    if (eatersJson == null || eatersJson.isEmpty) return [];
+    return eatersJson.split(',').map((e) => int.tryParse(e) ?? 0).where((e) => e > 0).toList();
   }
 }
