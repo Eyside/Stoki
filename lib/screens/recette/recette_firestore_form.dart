@@ -355,7 +355,7 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
                   // Sélection du groupe
                   if (_visibility == RecetteVisibility.group) ...[
                     DropdownButtonFormField<String>(
-                      value: _selectedGroupId,
+                      initialValue: _selectedGroupId,
                       decoration: const InputDecoration(
                         labelText: 'Groupe *',
                         border: OutlineInputBorder(),
@@ -376,7 +376,7 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
 
                   // Catégorie
                   DropdownButtonFormField<String>(
-                    value: _selectedCategory,
+                    initialValue: _selectedCategory,
                     decoration: const InputDecoration(
                       labelText: 'Catégorie',
                       border: OutlineInputBorder(),
@@ -490,7 +490,7 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
                             ),
                           ),
                         );
-                      }).toList(),
+                      }),
 
                     const SizedBox(height: 16),
                   ],

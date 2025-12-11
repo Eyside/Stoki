@@ -287,7 +287,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _activityLevel,
+              initialValue: _activityLevel,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
               ),

@@ -8,7 +8,6 @@ import 'providers.dart';
 import 'screens/home_screen.dart';
 import 'screens/frigo_screen.dart';
 import 'screens/recette/recette_unified_screen.dart';
-import 'screens/recette/recette_cloud_screen.dart';
 import 'screens/planning_screen_new.dart'; // ← MODIFIÉ : nouveau planning
 import 'screens/shopping_list_screen.dart';
 import 'screens/ingredient_list_screen.dart';

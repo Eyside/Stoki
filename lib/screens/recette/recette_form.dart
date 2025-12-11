@@ -196,7 +196,7 @@ class _RecetteFormScreenState extends State<RecetteFormScreen> {
                         child: Column(
                           children: [
                             DropdownButtonFormField<Ingredient>(
-                              value: _selectedIngredient,
+                              initialValue: _selectedIngredient,
                               hint: const Text("Choisir un ingrédient"),
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
@@ -229,7 +229,7 @@ class _RecetteFormScreenState extends State<RecetteFormScreen> {
                                 Expanded(
                                   flex: 1,
                                   child: DropdownButtonFormField<String>(
-                                    value: _unite,
+                                    initialValue: _unite,
                                     decoration: const InputDecoration(
                                       labelText: "Unité",
                                       border: OutlineInputBorder(),

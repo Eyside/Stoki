@@ -182,9 +182,7 @@ class _RecetteUnifiedScreenState extends ConsumerState<RecetteUnifiedScreen> {
 
     setState(() {
       _sourceOptions = options;
-      if (_selectedSource == null) {
-        _selectedSource = options.first;
-      }
+      _selectedSource ??= options.first;
     });
   }
 

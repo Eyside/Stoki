@@ -358,7 +358,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                 children: [
                   // Sélection de la recette
                   DropdownButtonFormField<Recette>(
-                    value: selectedRecette,
+                    initialValue: selectedRecette,
                     hint: const Text('Choisir une recette'),
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
@@ -566,7 +566,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<Recette>(
-                    value: selectedRecette,
+                    initialValue: selectedRecette,
                     hint: const Text('Choisir une recette'),
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),

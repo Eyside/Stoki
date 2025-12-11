@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../models/recette_firestore.dart';
 import '../../services/recette_firestore_service.dart';
 import '../../services/auth_service.dart';
-import '../../repositories/ingredient_repository.dart';
 import '../../database.dart';
 import '../../providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

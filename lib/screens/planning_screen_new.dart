@@ -133,7 +133,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
 
     setState(() {
       _sourceOptions = options;
-      if (_selectedSource == null) _selectedSource = options.first;
+      _selectedSource ??= options.first;
     });
   }
 
@@ -1421,7 +1421,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<dynamic>(
-                    value: selectedRecette,
+                    initialValue: selectedRecette,
                     decoration: const InputDecoration(
                       labelText: 'Recette *',
                       border: OutlineInputBorder(),
@@ -1449,7 +1449,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: selectedMealType,
+                    initialValue: selectedMealType,
                     decoration: const InputDecoration(
                       labelText: 'Type de repas',
                       border: OutlineInputBorder(),
@@ -1499,7 +1499,7 @@ class _PlanningScreenState extends ConsumerState<PlanningScreen> {
                       ),
                       if (visibility == PlanningVisibility.group)
                         DropdownButtonFormField<String>(
-                          value: selectedGroupId,
+                          initialValue: selectedGroupId,
                           decoration: const InputDecoration(
                             labelText: 'Groupe *',
                             border: OutlineInputBorder(),

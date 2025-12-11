@@ -15,7 +15,7 @@ class CalorieTrackingScreen extends ConsumerStatefulWidget {
 
 class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
   DateTime _selectedDate = DateTime.now();
-  String _viewMode = 'day';
+  final String _viewMode = 'day';
 
   late CalorieTrackingRepository _trackingRepo;
   late UserProfileRepository _profileRepo;
@@ -328,8 +328,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
               'L: ${tracking.fats.toStringAsFixed(0)}g',
         ),
         trailing: Text(
-          tracking.date.hour.toString().padLeft(2, '0') + ':' +
-              tracking.date.minute.toString().padLeft(2, '0'),
+          '${tracking.date.hour.toString().padLeft(2, '0')}:${tracking.date.minute.toString().padLeft(2, '0')}',
           style: const TextStyle(color: Colors.grey),
         ),
       ),

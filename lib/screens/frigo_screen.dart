@@ -158,7 +158,7 @@ class _FrigoScreenState extends State<FrigoScreen> {
 
     setState(() {
       _sourceOptions = options;
-      if (_selectedSource == null) _selectedSource = options.first;
+      _selectedSource ??= options.first;
     });
   }
 
@@ -341,7 +341,7 @@ class _FrigoScreenState extends State<FrigoScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: unit,
+                        initialValue: unit,
                         decoration: const InputDecoration(labelText: "Unité", border: OutlineInputBorder()),
                         items: const [
                           DropdownMenuItem(value: 'g', child: Text('g')),
@@ -355,7 +355,7 @@ class _FrigoScreenState extends State<FrigoScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: location,
+                  initialValue: location,
                   decoration: const InputDecoration(labelText: "Emplacement", border: OutlineInputBorder()),
                   items: const [
                     DropdownMenuItem(value: 'frigo', child: Text('🧊 Frigo')),
@@ -409,7 +409,7 @@ class _FrigoScreenState extends State<FrigoScreen> {
                     ),
                     if (visibility == FrigoVisibility.group)
                       DropdownButtonFormField<String>(
-                        value: selectedGroupId,
+                        initialValue: selectedGroupId,
                         decoration: const InputDecoration(labelText: 'Groupe *', border: OutlineInputBorder(), prefixIcon: Icon(Icons.group)),
                         items: _userGroups.map((group) => DropdownMenuItem<String>(value: group['id'], child: Text(group['name'] ?? 'Groupe'))).toList(),
                         onChanged: (v) => setDialogState(() => selectedGroupId = v),
@@ -525,7 +525,7 @@ class _FrigoScreenState extends State<FrigoScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: unit,
+                        initialValue: unit,
                         decoration: const InputDecoration(labelText: "Unité", border: OutlineInputBorder()),
                         items: const [
                           DropdownMenuItem(value: 'g', child: Text('g')),
@@ -539,7 +539,7 @@ class _FrigoScreenState extends State<FrigoScreen> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: location,
+                  initialValue: location,
                   decoration: const InputDecoration(labelText: "Emplacement", border: OutlineInputBorder()),
                   items: const [
                     DropdownMenuItem(value: 'frigo', child: Text('🧊 Frigo')),
@@ -583,7 +583,7 @@ class _FrigoScreenState extends State<FrigoScreen> {
                     ),
                     if (visibility == FrigoVisibility.group)
                       DropdownButtonFormField<String>(
-                        value: selectedGroupId,
+                        initialValue: selectedGroupId,
                         decoration: const InputDecoration(labelText: 'Groupe *'),
                         items: _userGroups.map((g) => DropdownMenuItem<String>(value: g['id'], child: Text(g['name'] ?? 'Groupe'))).toList(),
                         onChanged: (v) => setDialogState(() => selectedGroupId = v),

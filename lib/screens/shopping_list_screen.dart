@@ -490,7 +490,7 @@ class _ShoppingListScreenState extends ConsumerState<ShoppingListScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: unit,
+                      initialValue: unit,
                       decoration: const InputDecoration(
                         labelText: 'Unité',
                         border: OutlineInputBorder(),

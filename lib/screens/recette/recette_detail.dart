@@ -329,7 +329,7 @@ class _RecetteDetailScreenState extends State<RecetteDetailScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: unite,
+                initialValue: unite,
                 decoration: const InputDecoration(
                   labelText: "Unité",
                   border: OutlineInputBorder(),
