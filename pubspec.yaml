@@ -1,0 +1,69 @@
+name: stoki
+description: "Gestion recettes, frigo et liste de courses — offline first"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.13.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ---- Database ----
+  drift: ^2.15.0
+  sqlite3_flutter_libs: ^0.5.0
+  path_provider: ^2.1.0
+  path: ^1.9.0
+
+  # ---- State management ----
+  flutter_riverpod: ^3.0.3
+
+  # AJOUTEZ CES LIGNES - Firebase
+  firebase_core: ^4.2.1
+  firebase_auth: ^6.1.2
+  cloud_firestore: ^6.1.0
+  firebase_storage: ^13.0.4
+  google_sign_in: ^5.4.4
+  shared_preferences: ^2.3.2
+  async: ^2.11.0  # Pour StreamZip
+
+  # ---- HTTP / API ----
+  http: ^1.2.0
+  dio: ^5.4.0
+
+  # ---- Scanner ----
+  mobile_scanner: ^7.1.3
+
+  # ---- Permissions ----
+  permission_handler: ^12.0.1
+
+  # ---- Utilities ----
+  intl: ^0.20.2
+  uuid: ^4.3.3
+  flutter_secure_storage: ^10.0.0
+
+  # ---- UI ----
+  cupertino_icons: ^1.0.8
+
+  #----calendar----
+  table_calendar: ^3.0.9
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # ---- Drift codegen ----
+  drift_dev: ^2.15.0
+  build_runner: ^2.4.8
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Uncomment when you create the assets folder
+  # assets:
+  #   - assets/images/
