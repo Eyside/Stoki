@@ -11,6 +11,9 @@ import '../services/shopping_list_generator_service.dart';
 import '../services/group_service.dart';
 import '../services/auth_service.dart';
 import '../utils/shopping_list_category_helper.dart';
+import '../models/frigo_firestore.dart'; // ✅ Pour FrigoVisibility
+import '../services/frigo_firestore_service.dart'; // ✅ Pour le service cloud
+
 
 /// Options de source pour la liste de courses
 class ShoppingSourceOption {
@@ -957,6 +960,16 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
   Future<void> _addCompletedToFrigo(List<ShoppingListFirestore> completed) async {
     String location = 'frigo';
 
+    // ✅ AUTO-DÉTECTION de la visibilité et du groupe
+    // On utilise la source actuellement sélectionnée dans la liste de courses
+    final FrigoVisibility visibility = _selectedSource!.type == ShoppingListSource.group
+        ? FrigoVisibility.group
+        : FrigoVisibility.private;
+
+    final String? targetGroupId = _selectedSource!.type == ShoppingListSource.group
+        ? _selectedSource!.groupId
+        : null;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(
@@ -965,15 +978,84 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('${completed.length} article(s) seront ajoutés au stock.'),
-              const SizedBox(height: 16),
-              const Text('Emplacement:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
+              // Info sur la destination
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: visibility == FrigoVisibility.private
+                      ? Colors.blue.shade50
+                      : Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: visibility == FrigoVisibility.private
+                        ? Colors.blue.shade200
+                        : Colors.green.shade200,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      visibility == FrigoVisibility.private
+                          ? Icons.lock_rounded
+                          : Icons.group_rounded,
+                      color: visibility == FrigoVisibility.private
+                          ? Colors.blue.shade700
+                          : Colors.green.shade700,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            visibility == FrigoVisibility.private
+                                ? 'Stock privé'
+                                : 'Stock du groupe: ${_selectedSource!.groupName ?? "Groupe"}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: visibility == FrigoVisibility.private
+                                  ? Colors.blue.shade900
+                                  : Colors.green.shade900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${completed.length} article(s) seront ajoutés',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Sélection de l'emplacement
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Emplacement de stockage:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 12),
+
               SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment(value: 'frigo', label: Text('🧊 Frigo')),
-                  ButtonSegment(value: 'placard', label: Text('📦 Placard')),
-                  ButtonSegment(value: 'congélateur', label: Text('❄️ Congélateur')),
+                  ButtonSegment(
+                    value: 'frigo',
+                    label: Text('🧊 Frigo'),
+                  ),
+                  ButtonSegment(
+                    value: 'placard',
+                    label: Text('📦 Placard'),
+                  ),
+                  ButtonSegment(
+                    value: 'congélateur',
+                    label: Text('❄️ Congél.'),
+                  ),
                 ],
                 selected: {location},
                 onSelectionChanged: (Set<String> newSelection) {
@@ -989,7 +1071,12 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(c, true),
-              child: const Text('Ajouter'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: visibility == FrigoVisibility.private
+                    ? Colors.blue
+                    : Colors.green,
+              ),
+              child: const Text('Ajouter au stock'),
             ),
           ],
         ),
@@ -998,30 +1085,101 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
 
     if (confirm != true) return;
 
-    // Ajout au frigo
+    // ✅ AJOUT AU CLOUD avec auto-détection
+    final frigoCloudService = ref.read(frigoFirestoreServiceProvider);
     int addedCount = 0;
+    int skippedCount = 0;
+
+    // Afficher un indicateur de chargement
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (c) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Ajout au stock...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     for (final item in completed) {
-      if (item.ingredientId != null) {
-        await _frigoRepo.addToFrigo(
-          ingredientId: int.parse(item.ingredientId!),
+      try {
+        // Ajouter au cloud avec la visibilité détectée automatiquement
+        await frigoCloudService.addToFrigo(
+          ingredientId: item.ingredientId ?? '',
+          ingredientName: item.ingredientName ?? item.customName ?? 'Article',
           quantity: item.quantity,
           unit: item.unit,
           location: location,
+          bestBefore: null, // Pas de date de péremption depuis la liste de courses
+          visibility: visibility,
+          groupId: targetGroupId,
+          caloriesPer100g: item.caloriesPer100g ?? 0,
+          proteinsPer100g: item.proteinsPer100g ?? 0,
+          fatsPer100g: item.fatsPer100g ?? 0,
+          carbsPer100g: item.carbsPer100g ?? 0,
+          fibersPer100g: item.fibersPer100g ?? 0,
+          densityGPerMl: item.densityGPerMl,
+          avgWeightPerUnitG: item.avgWeightPerUnitG,
         );
+
         addedCount++;
 
-        // Supprimer de la liste
+        // Supprimer de la liste de courses
         if (item.visibility == ShoppingVisibility.local) {
           await _localRepo.deleteItem(int.parse(item.id));
         } else {
           await _cloudService.deleteItem(item.id);
         }
+      } catch (e) {
+        print('❌ Erreur ajout au frigo: $e');
+        skippedCount++;
       }
     }
 
+    // Fermer le loading
     if (mounted) {
+      Navigator.pop(context);
+    }
+
+    // Afficher le résultat
+    if (mounted) {
+      final String destinationType = visibility == FrigoVisibility.private
+          ? 'stock privé'
+          : 'stock du groupe "${_selectedSource!.groupName}"';
+
+      final message = addedCount > 0
+          ? '✅ $addedCount article(s) ajouté(s) au $destinationType ($location) !'
+          : '⚠️ Aucun article ajouté';
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$addedCount article(s) ajouté(s) au $location !')),
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: const TextStyle(fontWeight: FontWeight.bold)),
+              if (skippedCount > 0)
+                Text(
+                  '$skippedCount article(s) ignoré(s) (erreur)',
+                  style: const TextStyle(fontSize: 12),
+                ),
+            ],
+          ),
+          backgroundColor: addedCount > 0 ? Colors.green : Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
       );
       setState(() {});
     }

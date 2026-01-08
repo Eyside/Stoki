@@ -1,4 +1,4 @@
-// lib/models/recette_firestore.dart
+// lib/models/recette_firestore.dart (VERSION AVEC groupName)
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum RecetteVisibility {
@@ -19,6 +19,7 @@ class RecetteFirestore {
   final String ownerId;
   final RecetteVisibility visibility;
   final String? groupId; // Si visibility = group
+  final String? groupName; // ✅ AJOUTÉ - Nom du groupe pour affichage
 
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -37,6 +38,7 @@ class RecetteFirestore {
     required this.ownerId,
     required this.visibility,
     this.groupId,
+    this.groupName, // ✅ AJOUTÉ
     required this.createdAt,
     required this.updatedAt,
     this.nutrition,
@@ -57,6 +59,7 @@ class RecetteFirestore {
       ownerId: data['ownerId'] ?? '',
       visibility: _parseVisibility(data['visibility']),
       groupId: data['groupId'],
+      groupName: data['groupName'], // ✅ AJOUTÉ
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       nutrition: data['nutrition'] != null
@@ -77,6 +80,7 @@ class RecetteFirestore {
       'ownerId': ownerId,
       'visibility': visibility.name,
       'groupId': groupId,
+      'groupName': groupName, // ✅ AJOUTÉ
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'nutrition': nutrition,
@@ -103,6 +107,7 @@ class RecetteFirestore {
     String? imageUrl,
     RecetteVisibility? visibility,
     String? groupId,
+    String? groupName, // ✅ AJOUTÉ
     Map<String, double>? nutrition,
   }) {
     return RecetteFirestore(
@@ -116,6 +121,7 @@ class RecetteFirestore {
       ownerId: ownerId,
       visibility: visibility ?? this.visibility,
       groupId: groupId ?? this.groupId,
+      groupName: groupName ?? this.groupName, // ✅ AJOUTÉ
       createdAt: createdAt,
       updatedAt: DateTime.now(),
       nutrition: nutrition ?? this.nutrition,
@@ -140,7 +146,8 @@ class RecetteFirestore {
       case RecetteVisibility.private:
         return 'Privée';
       case RecetteVisibility.group:
-        return 'Groupe';
+      // ✅ AMÉLIORÉ - Affiche le nom du groupe si disponible
+        return groupName != null ? 'Groupe: $groupName' : 'Groupe';
     }
   }
 }

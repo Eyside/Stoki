@@ -1,4 +1,4 @@
-// lib/services/group_profile_service.dart (VERSION SIMPLIFIÉE)
+// lib/services/group_profile_service.dart (VERSION CORRIGÉE)
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../database.dart';
 import 'auth_service.dart';
@@ -269,18 +269,24 @@ class GroupProfileService {
   }
 
   // ============================================================================
-  // CONVERSION POUR COMPATIBILITÉ
+  // CONVERSION POUR COMPATIBILITÉ - ✅ CORRIGÉ
   // ============================================================================
 
   /// Convertit les profils de groupe en objets UserProfile temporaires
   List<UserProfile> convertToUserProfiles(List<Map<String, dynamic>> groupProfiles) {
     return groupProfiles.map((profile) {
-      final tempId = -(profile['userId'].hashCode.abs());
+      // ✅ CORRECTION : Utiliser userId + localProfileId pour garantir l'unicité
+      final userId = profile['userId'] ?? '';
+      final localProfileId = profile['localProfileId'] ?? 0;
+
+      // Créer un ID unique en combinant userId et localProfileId
+      final uniqueString = '$userId-$localProfileId';
+      final tempId = -(uniqueString.hashCode.abs());
 
       return UserProfile(
         id: tempId,
         name: profile['name'] ?? 'Profil inconnu',
-        userId: profile['userId'] ?? '',
+        userId: userId,
         sex: profile['sex'] ?? 'other',
         age: profile['age'] ?? 30,
         heightCm: (profile['heightCm'] ?? 170.0).toDouble(),

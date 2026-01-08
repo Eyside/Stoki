@@ -1,28 +1,34 @@
-// lib/screens/recette/recette_firestore_form.dart
+// lib/screens/recette/recette_firestore_form.dart (VERSION CLOUD FINALE)
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/recette_firestore.dart';
+import '../../models/ingredient_firestore.dart';
 import '../../services/recette_firestore_service.dart';
-import '../../services/group_service.dart';
 import '../../services/auth_service.dart';
-import '../../repositories/ingredient_repository.dart';
-import '../../database.dart';
+import '../../widgets/ingredient_picker_cloud_widget.dart';
 import 'recette_firestore_detail.dart';
 
-class RecetteFirestoreForm extends StatefulWidget {
+class RecetteFirestoreForm extends ConsumerStatefulWidget {
   final RecetteFirestore? recette;
-  final IngredientRepository ingredientRepository;
+
+  // ✅ Paramètres pour pré-remplir selon le contexte
+  final RecetteVisibility? defaultVisibility;
+  final String? groupId;
+  final String? groupName;
 
   const RecetteFirestoreForm({
     super.key,
     this.recette,
-    required this.ingredientRepository,
+    this.defaultVisibility,
+    this.groupId,
+    this.groupName,
   });
 
   @override
-  State<RecetteFirestoreForm> createState() => _RecetteFirestoreFormState();
+  ConsumerState<RecetteFirestoreForm> createState() => _RecetteFirestoreFormState();
 }
 
-class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
+class _RecetteFirestoreFormState extends ConsumerState<RecetteFirestoreForm> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _instructionsCtrl = TextEditingController();
@@ -30,16 +36,14 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
   final _notesCtrl = TextEditingController();
 
   final _recetteService = RecetteFirestoreService();
-  final _groupService = GroupService();
   final _authService = AuthService();
 
-  RecetteVisibility _visibility = RecetteVisibility.private;
+  late RecetteVisibility _visibility;
   String? _selectedCategory;
-  String? _selectedGroupId;
-  List<Map<String, dynamic>> _userGroups = [];
+  late String? _selectedGroupId;
+  late String? _selectedGroupName;
   bool _isLoading = false;
 
-  // NOUVEAU: Liste des ingrédients en attente
   final List<RecetteIngredientFirestore> _pendingIngredients = [];
 
   final _categories = [
@@ -58,9 +62,9 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
   @override
   void initState() {
     super.initState();
-    _loadUserGroups();
 
     if (widget.recette != null) {
+      // Mode édition
       _nameCtrl.text = widget.recette!.name;
       _instructionsCtrl.text = widget.recette!.instructions ?? '';
       _servingsCtrl.text = widget.recette!.servings.toString();
@@ -68,29 +72,25 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
       _selectedCategory = widget.recette!.category;
       _visibility = widget.recette!.visibility;
       _selectedGroupId = widget.recette!.groupId;
+      _selectedGroupName = null; // Le groupName n'existe pas sur RecetteFirestore
+    } else {
+      // Mode création - utiliser les valeurs par défaut du contexte
+      _visibility = widget.defaultVisibility ?? RecetteVisibility.private;
+      _selectedGroupId = widget.groupId;
+      _selectedGroupName = widget.groupName;
     }
   }
 
-  Future<void> _loadUserGroups() async {
-    final userId = _authService.currentUser?.uid;
-    if (userId == null) return;
-
-    _groupService.getUserGroups(userId).listen((groups) {
-      if (mounted) {
-        setState(() {
-          _userGroups = groups;
-        });
-      }
-    });
-  }
-
-  // NOUVEAU: Ajouter un ingrédient à la liste temporaire
+  // ✅ VERSION CLOUD avec le nouveau picker
   Future<void> _addIngredient() async {
-    final ingredients = await widget.ingredientRepository.getAllIngredients();
+    // Afficher le picker d'ingrédients cloud
+    final ingredient = await showIngredientPickerCloud(context, ref);
+
+    if (ingredient == null) return;
 
     if (!mounted) return;
 
-    Ingredient? selected;
+    // Demander la quantité
     final quantCtrl = TextEditingController();
     String unite = 'g';
 
@@ -98,23 +98,37 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c2, setDialogState) => AlertDialog(
-          title: const Text("Ajouter ingrédient"),
+          title: Text("Ajouter ${ingredient.name}"),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DropdownButton<Ingredient>(
-                value: selected,
-                hint: const Text("Choisir un ingrédient"),
-                isExpanded: true,
-                items: ingredients
-                    .map((i) => DropdownMenuItem(
-                  value: i,
-                  child: Text(i.name),
-                ))
-                    .toList(),
-                onChanged: (v) => setDialogState(() => selected = v),
+              // Infos de l'ingrédient
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      ingredient.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${ingredient.caloriesPer100g.toStringAsFixed(0)} kcal/100g',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+
+              // Quantité
               TextField(
                 controller: quantCtrl,
                 decoration: const InputDecoration(
@@ -122,14 +136,22 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
               ),
               const SizedBox(height: 12),
-              DropdownButton<String>(
+
+              // Unité
+              DropdownButtonFormField<String>(
                 value: unite,
-                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: "Unité",
+                  border: OutlineInputBorder(),
+                ),
                 items: const [
                   DropdownMenuItem(value: 'g', child: Text('g (grammes)')),
+                  DropdownMenuItem(value: 'kg', child: Text('kg (kilogrammes)')),
                   DropdownMenuItem(value: 'ml', child: Text('ml (millilitres)')),
+                  DropdownMenuItem(value: 'L', child: Text('L (litres)')),
                   DropdownMenuItem(value: 'unité', child: Text('unité (pièce)')),
                 ],
                 onChanged: (v) => setDialogState(() => unite = v ?? 'g'),
@@ -143,6 +165,9 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(c, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+              ),
               child: const Text("Ajouter"),
             ),
           ],
@@ -150,31 +175,38 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
       ),
     );
 
-    if (ok == true && selected != null) {
+    if (ok == true) {
       final q = double.tryParse(quantCtrl.text.trim()) ?? 0.0;
       if (q > 0) {
-        final ingredient = RecetteIngredientFirestore(
-          ingredientId: selected!.id.toString(),
-          ingredientName: selected!.name,
+        final recetteIngredient = RecetteIngredientFirestore(
+          ingredientId: ingredient.id, // ✅ ID Cloud (String)
+          ingredientName: ingredient.name,
           quantity: q,
           unit: unite,
-          caloriesPer100g: selected!.caloriesPer100g,
-          proteinsPer100g: selected!.proteinsPer100g,
-          fatsPer100g: selected!.fatsPer100g,
-          carbsPer100g: selected!.carbsPer100g,
-          fibersPer100g: selected!.fibersPer100g,
-          densityGPerMl: selected!.densityGPerMl,
-          avgWeightPerUnitG: selected!.avgWeightPerUnitG,
+          caloriesPer100g: ingredient.caloriesPer100g,
+          proteinsPer100g: ingredient.proteinsPer100g,
+          fatsPer100g: ingredient.fatsPer100g,
+          carbsPer100g: ingredient.carbsPer100g,
+          fibersPer100g: ingredient.fibersPer100g,
+          densityGPerMl: ingredient.densityGPerMl,
+          avgWeightPerUnitG: ingredient.avgWeightPerUnitG,
         );
 
         setState(() {
-          _pendingIngredients.add(ingredient);
+          _pendingIngredients.add(recetteIngredient);
         });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ ${ingredient.name} ajouté ($q $unite)'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     }
   }
 
-  // NOUVEAU: Supprimer un ingrédient de la liste temporaire
   void _removeIngredient(int index) {
     setState(() {
       _pendingIngredients.removeAt(index);
@@ -186,7 +218,7 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
 
     if (_visibility == RecetteVisibility.group && _selectedGroupId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sélectionnez un groupe pour une recette de groupe')),
+        const SnackBar(content: Text('Erreur: groupe non défini')),
       );
       return;
     }
@@ -198,15 +230,15 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
         // Création
         final recetteId = await _recetteService.createRecette(
           name: _nameCtrl.text.trim(),
-          instructions: _instructionsCtrl.text.trim(),
+          instructions: _instructionsCtrl.text.trim().isEmpty ? null : _instructionsCtrl.text.trim(),
           servings: int.tryParse(_servingsCtrl.text) ?? 1,
           category: _selectedCategory,
-          notes: _notesCtrl.text.trim(),
+          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
           visibility: _visibility,
-          groupId: _selectedGroupId,
+          groupId: _visibility == RecetteVisibility.group ? _selectedGroupId : null,
         );
 
-        // NOUVEAU: Ajouter tous les ingrédients
+        // Ajouter tous les ingrédients
         for (final ingredient in _pendingIngredients) {
           await _recetteService.addIngredient(
             recetteId: recetteId,
@@ -227,6 +259,7 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
               content: Text(_pendingIngredients.isEmpty
                   ? 'Recette créée !'
                   : 'Recette créée avec ${_pendingIngredients.length} ingrédient(s) !'),
+              backgroundColor: const Color(0xFF10B981),
             ),
           );
         }
@@ -235,16 +268,19 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
         await _recetteService.updateRecette(
           recetteId: widget.recette!.id,
           name: _nameCtrl.text.trim(),
-          instructions: _instructionsCtrl.text.trim(),
+          instructions: _instructionsCtrl.text.trim().isEmpty ? null : _instructionsCtrl.text.trim(),
           servings: int.tryParse(_servingsCtrl.text) ?? 1,
           category: _selectedCategory,
-          notes: _notesCtrl.text.trim(),
+          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
         );
 
         if (mounted) {
           Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Recette modifiée !')),
+            const SnackBar(
+              content: Text('Recette modifiée !'),
+              backgroundColor: Color(0xFF10B981),
+            ),
           );
         }
       }
@@ -252,7 +288,10 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
         );
       }
     }
@@ -261,10 +300,11 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.recette != null;
+    final isGroupContext = widget.groupId != null;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEditing ? 'Modifier la recette' : 'Nouvelle recette cloud'),
+        title: Text(isEditing ? 'Modifier la recette' : 'Nouvelle recette'),
         actions: [
           IconButton(
             icon: _isLoading
@@ -280,223 +320,196 @@ class _RecetteFirestoreFormState extends State<RecetteFirestoreForm> {
       ),
       body: Form(
         key: _formKey,
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            Expanded(
-              child: ListView(
+            // ✅ Info du contexte (si groupe)
+            if (isGroupContext && !isEditing) ...[
+              Container(
                 padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1FAE5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF059669)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.group, color: Color(0xFF059669)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Recette de groupe',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF059669),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Sera ajoutée au groupe "${_selectedGroupName ?? widget.groupName}"',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF047857),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Nom
+            TextFormField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nom de la recette *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.restaurant),
+              ),
+              validator: (v) => v?.trim().isEmpty ?? true ? 'Obligatoire' : null,
+            ),
+
+            const SizedBox(height: 16),
+
+            // Catégorie
+            DropdownButtonFormField<String>(
+              value: _selectedCategory,
+              decoration: const InputDecoration(
+                labelText: 'Catégorie',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.category),
+              ),
+              items: _categories.map((cat) {
+                return DropdownMenuItem(value: cat, child: Text(cat));
+              }).toList(),
+              onChanged: (v) => setState(() => _selectedCategory = v),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Nombre de portions
+            TextFormField(
+              controller: _servingsCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nombre de portions *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.restaurant_menu),
+              ),
+              keyboardType: TextInputType.number,
+              validator: (v) {
+                final n = int.tryParse(v ?? '');
+                if (n == null || n < 1) return 'Minimum 1 portion';
+                return null;
+              },
+            ),
+
+            const SizedBox(height: 16),
+
+            // Instructions
+            TextFormField(
+              controller: _instructionsCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Instructions',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.description),
+                alignLabelWithHint: true,
+              ),
+              maxLines: 5,
+            ),
+
+            const SizedBox(height: 16),
+
+            // Notes
+            TextFormField(
+              controller: _notesCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Notes personnelles',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.note),
+                alignLabelWithHint: true,
+              ),
+              maxLines: 3,
+            ),
+
+            const SizedBox(height: 24),
+
+            // Section ingrédients
+            if (!isEditing) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Nom
-                  TextFormField(
-                    controller: _nameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Nom de la recette *',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.restaurant),
-                    ),
-                    validator: (v) => v?.trim().isEmpty ?? true ? 'Obligatoire' : null,
+                  const Text(
+                    'Ingrédients (optionnel)',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-
-                  const SizedBox(height: 16),
-
-                  // Visibilité (seulement à la création)
-                  if (!isEditing) ...[
-                    Card(
-                      color: Colors.blue.shade50,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.visibility, color: Colors.blue.shade700),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Visibilité',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue.shade700,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-
-                            RadioListTile<RecetteVisibility>(
-                              title: const Text('Privée'),
-                              subtitle: const Text('Visible uniquement par moi'),
-                              value: RecetteVisibility.private,
-                              groupValue: _visibility,
-                              onChanged: (v) => setState(() {
-                                _visibility = v!;
-                                _selectedGroupId = null;
-                              }),
-                              secondary: const Icon(Icons.lock),
-                            ),
-
-                            RadioListTile<RecetteVisibility>(
-                              title: const Text('Recette de groupe'),
-                              subtitle: const Text('Tous les membres peuvent la modifier'),
-                              value: RecetteVisibility.group,
-                              groupValue: _visibility,
-                              onChanged: (v) => setState(() => _visibility = v!),
-                              secondary: const Icon(Icons.group),
-                            ),
-                          ],
-                        ),
-                      ),
+                  ElevatedButton.icon(
+                    onPressed: _addIngredient,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Ajouter'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
-
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Sélection du groupe
-                  if (_visibility == RecetteVisibility.group) ...[
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedGroupId,
-                      decoration: const InputDecoration(
-                        labelText: 'Groupe *',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.group),
-                      ),
-                      items: _userGroups.map((group) {
-                        return DropdownMenuItem<String>(
-                          value: group['id'],
-                          child: Text(group['name'] ?? 'Groupe'),
-                        );
-                      }).toList(),
-                      onChanged: (v) => setState(() => _selectedGroupId = v),
-                      validator: (v) => v == null ? 'Sélectionnez un groupe' : null,
-                    ),
-
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Catégorie
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: 'Catégorie',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.category),
-                    ),
-                    items: _categories.map((cat) {
-                      return DropdownMenuItem(value: cat, child: Text(cat));
-                    }).toList(),
-                    onChanged: (v) => setState(() => _selectedCategory = v),
                   ),
-
-                  const SizedBox(height: 16),
-
-                  // Nombre de portions
-                  TextFormField(
-                    controller: _servingsCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombre de portions *',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.restaurant_menu),
-                    ),
-                    keyboardType: TextInputType.number,
-                    validator: (v) {
-                      final n = int.tryParse(v ?? '');
-                      if (n == null || n < 1) return 'Minimum 1 portion';
-                      return null;
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Instructions
-                  TextFormField(
-                    controller: _instructionsCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Instructions',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.description),
-                      alignLabelWithHint: true,
-                    ),
-                    maxLines: 5,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Notes
-                  TextFormField(
-                    controller: _notesCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Notes personnelles',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.note),
-                      alignLabelWithHint: true,
-                    ),
-                    maxLines: 3,
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // NOUVEAU: Section ingrédients
-                  if (!isEditing) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Ingrédients (optionnel)',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _addIngredient,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Ajouter'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    if (_pendingIngredients.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Aucun ingrédient ajouté',
-                          style: TextStyle(color: Colors.grey),
-                          textAlign: TextAlign.center,
-                        ),
-                      )
-                    else
-                      ..._pendingIngredients.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final ingredient = entry.value;
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              child: Text(ingredient.ingredientName[0].toUpperCase()),
-                            ),
-                            title: Text(ingredient.ingredientName),
-                            subtitle: Text('${ingredient.quantity} ${ingredient.unit}'),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _removeIngredient(index),
-                            ),
-                          ),
-                        );
-                      }),
-
-                    const SizedBox(height: 16),
-                  ],
                 ],
               ),
-            ),
+
+              const SizedBox(height: 8),
+
+              if (_pendingIngredients.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Aucun ingrédient ajouté',
+                    style: TextStyle(color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                ..._pendingIngredients.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final ingredient = entry.value;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: const Color(0xFF10B981),
+                        child: Text(
+                          ingredient.ingredientName[0].toUpperCase(),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      title: Text(
+                        ingredient.ingredientName,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        '${ingredient.quantity} ${ingredient.unit} • '
+                            '${ingredient.caloriesPer100g.toStringAsFixed(0)} kcal/100g',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _removeIngredient(index),
+                      ),
+                    ),
+                  );
+                }),
+
+              const SizedBox(height: 16),
+            ],
           ],
         ),
       ),

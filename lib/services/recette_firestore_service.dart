@@ -15,23 +15,25 @@ class RecetteFirestoreService {
   Future<String> createRecette({
     required String name,
     String? instructions,
-    int servings = 1,
+    required int servings,
     String? category,
     String? notes,
     String? imageUrl,
     required RecetteVisibility visibility,
-    String? groupId, // Obligatoire si visibility = group
+    String? groupId,
+    String? groupName, // ✅ AJOUTÉ
   }) async {
     final userId = _authService.currentUser?.uid;
-    if (userId == null) throw 'Non connecté';
+    if (userId == null) throw Exception('Utilisateur non connecté');
 
-    // Validation
     if (visibility == RecetteVisibility.group && groupId == null) {
-      throw 'Un groupId est requis pour une recette de groupe';
+      throw Exception('groupId requis pour les recettes de groupe');
     }
 
+    final recetteRef = _firestore.collection('recettes').doc();
+
     final recette = RecetteFirestore(
-      id: '', // Sera généré par Firestore
+      id: recetteRef.id,
       name: name,
       instructions: instructions,
       servings: servings,
@@ -41,14 +43,14 @@ class RecetteFirestoreService {
       ownerId: userId,
       visibility: visibility,
       groupId: groupId,
+      groupName: groupName, // ✅ AJOUTÉ
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
 
-    final docRef = await _firestore.collection('recettes').add(recette.toFirestore());
+    await recetteRef.set(recette.toFirestore());
 
-    print('✅ Recette créée: ${docRef.id}');
-    return docRef.id;
+    return recetteRef.id;
   }
 
   // ============================================================================

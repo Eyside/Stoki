@@ -1,20 +1,19 @@
-// lib/main.dart (CORRIGÉ)
+// lib/main.dart (VERSION CLOUD COMPLÈTE)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'providers.dart';
 import 'screens/home_screen.dart';
-import 'screens/frigo_screen.dart';
-import 'screens/recette/recette_unified_screen.dart';
-import 'screens/planning_screen_new.dart';
-import 'screens/shopping_list_screen_new.dart';
-import 'screens/ingredient_list_screen.dart';
-import 'screens/profiles_screen.dart'; // ✅ UNIQUE IMPORT POUR LES PROFILS
+import 'screens/group_stock_selection_screen.dart';
+import 'screens/recette/group_recipe_selection_screen.dart';
+import 'screens/planning/group_planning_selection_screen.dart';
+import 'screens/shopping_planning_selection_screen.dart'; // ✅ NOUVEAU
+import 'screens/profiles_screen.dart';
 import 'screens/calorie_tracking_screen.dart';
 import 'screens/groups/groups_screen.dart';
 import 'screens/auth/auth_wrapper.dart';
 import 'services/auth_service.dart';
+import 'providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,20 +35,36 @@ class MyApp extends StatelessWidget {
       title: 'Stoki',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
+          seedColor: const Color(0xFF95D9C3),
           brightness: Brightness.light,
         ),
         useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: Color(0xFF1E293B),
+          elevation: 0,
+          centerTitle: false,
+        ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFFF1F8F4),
-          selectedItemColor: Color(0xFF2E7D32),
-          unselectedItemColor: Color(0xFF757575),
+          backgroundColor: Colors.white,
+          selectedItemColor: Color(0xFF10B981),
+          unselectedItemColor: Color(0xFF94A3B8),
           elevation: 8,
           type: BottomNavigationBarType.fixed,
+          selectedLabelStyle: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFF10B981),
+          foregroundColor: Colors.white,
         ),
       ),
       home: const AuthWrapper(),
       debugShowCheckedModeBanner: false,
+      routes: {
+        '/recipe-selection': (context) => const GroupRecipeSelectionScreen(),
+        '/planning-selection': (context) => const GroupPlanningSelectionScreen(),
+        '/shopping-selection': (context) => const ShoppingPlanningSelectionScreen(), // ✅ NOUVEAU
+      },
     );
   }
 }
@@ -66,19 +81,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final ingredientRepo = ref.watch(ingredientRepositoryProvider);
-    final frigoRepo = ref.watch(frigoRepositoryProvider);
-    final recetteRepo = ref.watch(recetteRepositoryProvider);
-
     final pages = <Widget>[
       const HomeScreen(),
-      FrigoScreen(
-        frigoRepository: frigoRepo,
-        ingredientRepository: ingredientRepo,
-      ),
-      RecetteUnifiedScreen(recetteRepository: recetteRepo),
-      const PlanningScreen(),
-      const ShoppingListScreenNew(),
+      const GroupStockSelectionScreen(),
+      const GroupRecipeSelectionScreen(),
+      const GroupPlanningSelectionScreen(),
+      const ShoppingPlanningSelectionScreen(), // ✅ NOUVEAU: écran de sélection
     ];
 
     return Scaffold(
@@ -101,23 +109,23 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         onTap: (i) => setState(() => _currentIndex = i),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home),
+            icon: Icon(Icons.home_rounded),
             label: 'Accueil',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.kitchen),
+            icon: Icon(Icons.inventory_2_rounded),
             label: 'Stock',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.restaurant_menu),
+            icon: Icon(Icons.restaurant_menu_rounded),
             label: 'Recettes',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month),
+            icon: Icon(Icons.calendar_month_rounded),
             label: 'Planning',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart),
+            icon: Icon(Icons.shopping_cart_rounded),
             label: 'Courses',
           ),
         ],
@@ -143,7 +151,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   }
 
   Widget _buildDrawer(BuildContext context) {
-    final ingredientRepo = ref.watch(ingredientRepositoryProvider);
     final authService = AuthService();
     final user = authService.currentUser;
 
@@ -154,7 +161,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           DrawerHeader(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.green.shade700, Colors.green.shade400],
+                colors: [
+                  const Color(0xFF95D9C3),
+                  const Color(0xFFB8E6D5),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -164,21 +174,21 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 CircleAvatar(
-                  radius: 30,
+                  radius: 32,
                   backgroundColor: Colors.white,
                   backgroundImage: user?.photoURL != null
                       ? NetworkImage(user!.photoURL!)
                       : null,
                   child: user?.photoURL == null
-                      ? const Icon(Icons.person, size: 40, color: Colors.green)
+                      ? const Icon(Icons.person, size: 40, color: Color(0xFF10B981))
                       : null,
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Text(
                   user?.displayName ?? 'Stoki',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 24,
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -186,7 +196,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   user?.email ?? 'Gestion intelligente',
                   style: const TextStyle(
                     color: Colors.white70,
-                    fontSize: 14,
+                    fontSize: 13,
                   ),
                 ),
               ],
@@ -195,7 +205,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
           // Groupes
           ListTile(
-            leading: const Icon(Icons.group),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE4B5).withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.group_rounded, color: Color(0xFFF59E0B)),
+            ),
             title: const Text('Mes groupes'),
             subtitle: const Text('Partager avec famille & amis'),
             onTap: () {
@@ -207,11 +224,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             },
           ),
 
-          const Divider(),
+          const Divider(height: 1),
 
-          // ✅ PROFILS - MENU UNIQUE
+          // Profils
           ListTile(
-            leading: const Icon(Icons.people),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFBBDEFB).withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.people_rounded, color: Color(0xFF2196F3)),
+            ),
             title: const Text('Mes Profils'),
             subtitle: const Text('Gérer mes profils et ceux de ma famille'),
             onTap: () {
@@ -222,8 +246,16 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               );
             },
           ),
+
           ListTile(
-            leading: const Icon(Icons.analytics),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFCAB8FF).withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.analytics_rounded, color: Color(0xFF9C27B0)),
+            ),
             title: const Text('Suivi calorique'),
             subtitle: const Text('Historique de consommation'),
             onTap: () {
@@ -235,29 +267,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             },
           ),
 
-          const Divider(),
-
-          // Ingrédients
-          ListTile(
-            leading: const Icon(Icons.eco),
-            title: const Text('Ingrédients'),
-            subtitle: const Text('Gérer la base d\'ingrédients'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => IngredientListScreen(repository: ingredientRepo),
-                ),
-              );
-            },
-          ),
-
-          const Divider(),
+          const Divider(height: 1),
 
           // Paramètres
           ListTile(
-            leading: const Icon(Icons.settings),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.settings_rounded, color: Colors.grey.shade700),
+            ),
             title: const Text('Paramètres'),
             onTap: () {
               Navigator.pop(context);
@@ -269,15 +290,29 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
           // À propos
           ListTile(
-            leading: const Icon(Icons.info),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.info_rounded, color: Colors.grey.shade700),
+            ),
             title: const Text('À propos'),
             onTap: () {
               Navigator.pop(context);
               showAboutDialog(
                 context: context,
                 applicationName: 'Stoki',
-                applicationVersion: '1.0.0',
-                applicationIcon: const Icon(Icons.kitchen, size: 48, color: Colors.green),
+                applicationVersion: '2.0.0',
+                applicationIcon: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF95D9C3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.kitchen_rounded, size: 32, color: Colors.white),
+                ),
                 children: const [
                   Text('Application de gestion de stocks, recettes et planning de repas.'),
                 ],
@@ -285,40 +320,55 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             },
           ),
 
-          const Divider(),
+          const Divider(height: 1),
+          const SizedBox(height: 8),
 
           // Déconnexion
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Se déconnecter', style: TextStyle(color: Colors.red)),
-            onTap: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (c) => AlertDialog(
-                  title: const Text('Déconnexion'),
-                  content: const Text('Voulez-vous vraiment vous déconnecter ?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(c, false),
-                      child: const Text('Annuler'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(c, true),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                      child: const Text('Déconnexion'),
-                    ),
-                  ],
-                ),
-              );
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (c) => AlertDialog(
+                    title: const Text('Déconnexion'),
+                    content: const Text('Voulez-vous vraiment vous déconnecter ?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(c, false),
+                        child: const Text('Annuler'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(c, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade400,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Déconnexion'),
+                      ),
+                    ],
+                  ),
+                );
 
-              if (confirm == true) {
-                await authService.signOut();
-                if (context.mounted) {
-                  Navigator.pop(context);
+                if (confirm == true) {
+                  await authService.signOut();
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
                 }
-              }
-            },
+              },
+              icon: const Icon(Icons.logout_rounded, color: Colors.red),
+              label: const Text(
+                'Se déconnecter',
+                style: TextStyle(color: Colors.red),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.red),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
           ),
+          const SizedBox(height: 16),
         ],
       ),
     );

@@ -1,50 +1,100 @@
-// lib/repositories/frigo_repository.dart
-import 'package:drift/drift.dart';
-import '../database.dart';
+// lib/repositories/frigo_repository.dart - VERSION CLOUD
+// Ce repository est maintenant un simple wrapper du service cloud
+// Il est conservé pour la compatibilité mais toutes les opérations passent par le cloud
 
-class FrigoRepository extends DatabaseAccessor<AppDatabase> {
-  final AppDatabase db;
-  FrigoRepository(this.db) : super(db);
+import '../services/frigo_firestore_service.dart';
+import '../services/auth_service.dart';
+import '../models/frigo_firestore.dart';
 
-  Future<int> addToFrigo({
+class FrigoRepository {
+  final _frigoService = FrigoFirestoreService();
+  final _authService = AuthService();
+
+  // ⚠️ DEPRECATED: Utilisez directement FrigoFirestoreService
+  @Deprecated('Utilisez FrigoFirestoreService.addToFrigo')
+  Future<void> addToFrigo({
     required int ingredientId,
     required double quantity,
     required String unit,
     DateTime? bestBefore,
     String? location,
-  }) {
-    final companion = FrigoCompanion(
-      ingredientId: Value(ingredientId),
-      quantity: Value(quantity),
-      unit: Value(unit),
-      bestBefore: Value(bestBefore),
-      location: Value(location ?? 'frigo'),
+  }) async {
+    // Cette méthode ne devrait plus être utilisée
+    // Si elle est appelée, on lève une exception pour forcer la migration
+    throw UnsupportedError(
+      'addToFrigo() local est deprecated. Utilisez FrigoFirestoreService.addToFrigo() pour ajouter au cloud.',
     );
-    return into(db.frigo).insert(companion);
   }
 
-  Future<List<FrigoData>> getAllFrigo() => db.getAllFrigo();
-
+  // ⚠️ DEPRECATED: Utilisez directement FrigoFirestoreService.getMyStock()
+  @Deprecated('Utilisez FrigoFirestoreService.getMyStock()')
   Future<List<Map<String, dynamic>>> getAllFrigoWithIngredients() async {
-    final query = select(db.frigo).join([
-      leftOuterJoin(db.ingredients, db.ingredients.id.equalsExp(db.frigo.ingredientId)),
-    ]);
-    final rows = await query.get();
-    return rows.map((row) {
-      final f = row.readTable(db.frigo);
-      final ing = row.readTableOrNull(db.ingredients);
-      return {'frigo': f, 'ingredient': ing};
-    }).toList();
+    // Retourne une liste vide pour indiquer qu'il n'y a plus de stock local
+    // Les appelants devront migrer vers le service cloud
+    return [];
   }
 
-  Future<int> updateFrigoQuantity({
+  // ⚠️ DEPRECATED: Utilisez directement FrigoFirestoreService
+  @Deprecated('Utilisez FrigoFirestoreService.updateFrigoItem()')
+  Future<void> updateFrigoQuantity({
     required int id,
     required double quantity,
-  }) {
-    return (update(db.frigo)..where((t) => t.id.equals(id)))
-        .write(FrigoCompanion(quantity: Value(quantity)));
+  }) async {
+    throw UnsupportedError(
+      'updateFrigoQuantity() local est deprecated. Utilisez FrigoFirestoreService.updateFrigoItem().',
+    );
   }
 
-  Future<int> deleteFrigoItem(int id) =>
-      (delete(db.frigo)..where((t) => t.id.equals(id))).go();
+  // ⚠️ DEPRECATED: Utilisez directement FrigoFirestoreService
+  @Deprecated('Utilisez FrigoFirestoreService.deleteFrigoItem()')
+  Future<void> deleteFrigoItem(int id) async {
+    throw UnsupportedError(
+      'deleteFrigoItem() local est deprecated. Utilisez FrigoFirestoreService.deleteFrigoItem().',
+    );
+  }
+
+  // NOUVELLE MÉTHODE: Wrapper vers le service cloud pour compatibilité temporaire
+  Stream<List<FrigoFirestore>> getAllFrigoStream() {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) {
+      return Stream.value([]);
+    }
+    return _frigoService.getMyStock();
+  }
+
+  // NOUVELLE MÉTHODE: Conversion pour compatibilité avec l'ancien format
+  Future<List<Map<String, dynamic>>> getAllFrigoWithIngredientsFromCloud() async {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) return [];
+
+    try {
+      final cloudItems = await _frigoService.getMyStock().first;
+
+      // Conversion du format cloud vers l'ancien format pour compatibilité
+      return cloudItems.map((item) {
+        return {
+          'frigo': {
+            'id': item.id,
+            'quantity': item.quantity,
+            'unit': item.unit,
+            'location': item.location,
+            'bestBefore': item.bestBefore,
+            'addedAt': item.createdAt,
+          },
+          'ingredient': {
+            'id': int.tryParse(item.ingredientId) ?? 0,
+            'name': item.ingredientName,
+            'caloriesPer100g': item.caloriesPer100g,
+            'proteinsPer100g': item.proteinsPer100g,
+            'fatsPer100g': item.fatsPer100g,
+            'carbsPer100g': item.carbsPer100g,
+            'fibersPer100g': item.fibersPer100g,
+          },
+        };
+      }).toList();
+    } catch (e) {
+      print('❌ Erreur récupération stock cloud: $e');
+      return [];
+    }
+  }
 }

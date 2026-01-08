@@ -87,7 +87,35 @@ class PlanningFirestoreService {
       rethrow;
     }
   }
+  /// Récupère les prochains repas planifiés (pour la page d'accueil)
+  Stream<List<Map<String, dynamic>>> getUpcomingMeals({int limit = 3}) {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) {
+      return Stream.value([]);
+    }
 
+    final now = DateTime.now();
+
+    return _firestore
+        .collection('planning')
+        .where('ownerId', isEqualTo: userId)
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+        .orderBy('date', descending: false)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          'date': (data['date'] as Timestamp).toDate(),
+          'mealType': data['mealType'] ?? '',
+          'recipeName': data['recetteName'] ?? 'Repas',
+          'servings': data['servings'] ?? 1,
+        };
+      }).toList();
+    });
+  }
   // ============================================================================
   // RÉCUPÉRER MON PLANNING
   // ============================================================================
