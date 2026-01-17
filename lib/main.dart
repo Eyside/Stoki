@@ -7,10 +7,11 @@ import 'screens/home_screen.dart';
 import 'screens/group_stock_selection_screen.dart';
 import 'screens/recette/group_recipe_selection_screen.dart';
 import 'screens/planning/group_planning_selection_screen.dart';
-import 'screens/shopping_planning_selection_screen.dart'; // ✅ NOUVEAU
+import 'screens/shopping_planning_selection_screen.dart';
 import 'screens/profiles_screen.dart';
 import 'screens/calorie_tracking_screen.dart';
 import 'screens/groups/groups_screen.dart';
+import 'screens/ingredient_cloud_screen.dart'; // ✅ NOUVEAU
 import 'screens/auth/auth_wrapper.dart';
 import 'services/auth_service.dart';
 import 'providers.dart';
@@ -63,7 +64,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/recipe-selection': (context) => const GroupRecipeSelectionScreen(),
         '/planning-selection': (context) => const GroupPlanningSelectionScreen(),
-        '/shopping-selection': (context) => const ShoppingPlanningSelectionScreen(), // ✅ NOUVEAU
+        '/shopping-selection': (context) => const ShoppingPlanningSelectionScreen(),
       },
     );
   }
@@ -86,7 +87,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       const GroupStockSelectionScreen(),
       const GroupRecipeSelectionScreen(),
       const GroupPlanningSelectionScreen(),
-      const ShoppingPlanningSelectionScreen(), // ✅ NOUVEAU: écran de sélection
+      const ShoppingPlanningSelectionScreen(),
     ];
 
     return Scaffold(
@@ -225,6 +226,27 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           ),
 
           const Divider(height: 1),
+
+          // Ingrédients ✅ NOUVEAU
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFC8E6C9).withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.eco_rounded, color: Color(0xFF4CAF50)),
+            ),
+            title: const Text('Mes ingrédients'),
+            subtitle: const Text('Base de données personnelle'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const IngredientCloudScreen()),
+              );
+            },
+          ),
 
           // Profils
           ListTile(
