@@ -15,26 +15,38 @@ class UnitConverter {
     'cup': 240.0,
   };
 
+  /// Noms d'unité qui désignent une pièce (l'application propose « unité »).
+  static const Set<String> pieceUnits = {
+    'unité', 'unite', 'unités', 'unites',
+    'pièce', 'piece', 'pièces', 'pieces',
+    'pcs', 'pc', 'unit', 'u',
+  };
+
+  /// Poids utilisé quand l'ingrédient n'a pas de poids par pièce renseigné.
+  static const double defaultPieceWeightGrams = 100.0;
+
   static double toGrams({
     required double quantity,
     required String unit,
     double? weightPerPieceGrams,
     double densityGramsPerMl = 1.0,
   }) {
-    final u = unit.toLowerCase();
+    final u = unit.trim().toLowerCase();
     if (weightToGram.containsKey(u)) {
       return quantity * weightToGram[u]!;
     } else if (volumeToMl.containsKey(u)) {
       final ml = quantity * volumeToMl[u]!;
       return ml * densityGramsPerMl;
-    } else if (u == 'piece' || u == 'pcs' || u == 'unit') {
-      if (weightPerPieceGrams != null) {
-        return quantity * weightPerPieceGrams;
-      } else {
-        throw ArgumentError('weightPerPieceGrams required for unit "piece".');
-      }
+    } else if (pieceUnits.contains(u)) {
+      // Si le poids d'une pièce n'est pas renseigné, on prend 100 g par défaut
+      // au lieu de faire planter l'application.
+      final perPiece = (weightPerPieceGrams != null && weightPerPieceGrams > 0)
+          ? weightPerPieceGrams
+          : defaultPieceWeightGrams;
+      return quantity * perPiece;
     } else {
-      throw ArgumentError('Unknown unit: $unit');
+      // Unité inconnue : on évite le crash, on considère des grammes.
+      return quantity;
     }
   }
 

@@ -9,6 +9,7 @@ import 'screens/recette/group_recipe_selection_screen.dart';
 import 'screens/planning/group_planning_selection_screen.dart';
 import 'screens/shopping_planning_selection_screen.dart';
 import 'screens/profiles_screen.dart';
+import 'screens/scan/scan_screen.dart';
 import 'screens/calorie_tracking_screen.dart';
 import 'screens/groups/groups_screen.dart';
 import 'screens/ingredient_cloud_screen.dart'; // ✅ NOUVEAU
@@ -65,6 +66,8 @@ class MyApp extends StatelessWidget {
         '/recipe-selection': (context) => const GroupRecipeSelectionScreen(),
         '/planning-selection': (context) => const GroupPlanningSelectionScreen(),
         '/shopping-selection': (context) => const ShoppingPlanningSelectionScreen(),
+        '/scan': (context) => const ScanScreen(),
+        '/profiles': (context) => const ProfilesScreen(),
       },
     );
   }

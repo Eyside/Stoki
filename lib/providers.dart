@@ -15,10 +15,10 @@ import 'services/recette_sync_service.dart';
 import 'services/auth_service.dart';
 import 'services/group_profile_service.dart';
 import 'models/frigo_firestore.dart';
-import '../services/shopping_list_v2_generator_service.dart';
-import '../services/ingredient_firestore_service.dart';
-import '../services/meal_consumption_service.dart';
-import '../repositories/calorie_tracking_repository.dart';
+import 'services/shopping_list_v2_generator_service.dart';
+import 'services/ingredient_firestore_service.dart';
+import 'services/meal_consumption_service.dart';
+import 'repositories/calorie_tracking_repository.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   return AppDatabase();
