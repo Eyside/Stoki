@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/recette_firestore.dart';
 import '../../services/recette_firestore_service.dart';
 import '../../services/auth_service.dart';
-import '../../database.dart';
-import '../../providers.dart';
+import '../../widgets/ingredient_picker_cloud_widget.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class RecetteFirestoreDetail extends ConsumerStatefulWidget {
@@ -24,12 +23,11 @@ class _RecetteFirestoreDetailState extends ConsumerState<RecetteFirestoreDetail>
   final _authService = AuthService();
 
   Future<void> _addIngredient(RecetteFirestore recette) async {
-    final ingredientRepo = ref.read(ingredientRepositoryProvider);
-    final ingredients = await ingredientRepo.getAllIngredients();
+    // Même sélecteur que le formulaire de création : vos ingrédients + les
+    // ingrédients publics, tous lus dans Firestore (cloud).
+    final selected = await showIngredientPickerCloud(context, ref);
+    if (selected == null || !mounted) return;
 
-    if (!mounted) return;
-
-    Ingredient? selected;
     final quantCtrl = TextEditingController();
     String unite = 'g';
 
@@ -37,25 +35,18 @@ class _RecetteFirestoreDetailState extends ConsumerState<RecetteFirestoreDetail>
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c2, setDialogState) => AlertDialog(
-          title: const Text("Ajouter ingrédient"),
+          title: Text("Ajouter ${selected.name}"),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DropdownButton<Ingredient>(
-                value: selected,
-                hint: const Text("Choisir un ingrédient"),
-                isExpanded: true,
-                items: ingredients
-                    .map((i) => DropdownMenuItem(
-                  value: i,
-                  child: Text(i.name),
-                ))
-                    .toList(),
-                onChanged: (v) => setDialogState(() => selected = v),
+              Text(
+                '${selected.caloriesPer100g.toStringAsFixed(0)} kcal/100g',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: quantCtrl,
+                autofocus: true,
                 decoration: const InputDecoration(
                   labelText: "Quantité",
                   border: OutlineInputBorder(),
@@ -68,7 +59,9 @@ class _RecetteFirestoreDetailState extends ConsumerState<RecetteFirestoreDetail>
                 isExpanded: true,
                 items: const [
                   DropdownMenuItem(value: 'g', child: Text('g (grammes)')),
+                  DropdownMenuItem(value: 'kg', child: Text('kg (kilogrammes)')),
                   DropdownMenuItem(value: 'ml', child: Text('ml (millilitres)')),
+                  DropdownMenuItem(value: 'L', child: Text('L (litres)')),
                   DropdownMenuItem(value: 'unité', child: Text('unité (pièce)')),
                 ],
                 onChanged: (v) => setDialogState(() => unite = v ?? 'g'),
@@ -89,22 +82,22 @@ class _RecetteFirestoreDetailState extends ConsumerState<RecetteFirestoreDetail>
       ),
     );
 
-    if (ok == true && selected != null) {
-      final q = double.tryParse(quantCtrl.text.trim()) ?? 0.0;
+    if (ok == true) {
+      final q = double.tryParse(quantCtrl.text.trim().replaceAll(',', '.')) ?? 0.0;
       if (q > 0) {
-        // Créer l'ingrédient Firestore avec copie des infos
+        // Copie des infos nutritionnelles de l'ingrédient cloud dans la recette
         final ingredient = RecetteIngredientFirestore(
-          ingredientId: selected!.id.toString(),
-          ingredientName: selected!.name,
+          ingredientId: selected.id, // identifiant Firestore (texte)
+          ingredientName: selected.name,
           quantity: q,
           unit: unite,
-          caloriesPer100g: selected!.caloriesPer100g,
-          proteinsPer100g: selected!.proteinsPer100g,
-          fatsPer100g: selected!.fatsPer100g,
-          carbsPer100g: selected!.carbsPer100g,
-          fibersPer100g: selected!.fibersPer100g,
-          densityGPerMl: selected!.densityGPerMl,
-          avgWeightPerUnitG: selected!.avgWeightPerUnitG,
+          caloriesPer100g: selected.caloriesPer100g,
+          proteinsPer100g: selected.proteinsPer100g,
+          fatsPer100g: selected.fatsPer100g,
+          carbsPer100g: selected.carbsPer100g,
+          fibersPer100g: selected.fibersPer100g,
+          densityGPerMl: selected.densityGPerMl,
+          avgWeightPerUnitG: selected.avgWeightPerUnitG,
         );
 
         await _recetteService.addIngredient(
