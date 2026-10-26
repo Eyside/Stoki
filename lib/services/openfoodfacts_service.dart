@@ -69,7 +69,12 @@ class OpenFoodFactsService {
       final nutr = p['nutriments'] as Map<String, dynamic>? ?? {};
 
       // Extraction des valeurs nutritionnelles
-      final kcal = _parseNutriment(nutr, ['energy-kcal_100g', 'energy_100g']);
+      // 'energy_100g' d'OpenFoodFacts est en kJ (pas en kcal) : on le convertit.
+      var kcal = _parseNutriment(nutr, ['energy-kcal_100g', 'energy-kcal']);
+      if (kcal == 0) {
+        final kj = _parseNutriment(nutr, ['energy-kj_100g', 'energy_100g']);
+        kcal = kj / 4.184;
+      }
       final proteins = _parseNutriment(nutr, ['proteins_100g', 'proteins']);
       final fats = _parseNutriment(nutr, ['fat_100g', 'fat']);
       final carbs = _parseNutriment(nutr, ['carbohydrates_100g', 'carbohydrates']);

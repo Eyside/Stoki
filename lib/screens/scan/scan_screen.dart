@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../models/ingredient_firestore.dart';
 import '../../providers.dart';
 import '../../services/openfoodfacts_service.dart';
 import '../../utils/permission_helper.dart';
@@ -19,6 +20,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   String? _message;
   OpenFoodFactsProduct? _product;
   bool _isDetecting = false;
+  bool _saving = false;
   late final MobileScannerController _cameraController;
 
   @override
@@ -78,10 +80,61 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     });
   }
 
+  /// Enregistre le produit scanné dans Firestore (collection `ingredients`).
+  /// Si ce code-barres existe déjà pour vous (ou en public), on n'ajoute pas de doublon.
+  Future<void> _saveProduct() async {
+    final product = _product;
+    if (product == null || _saving) return;
+
+    setState(() => _saving = true);
+    try {
+      final service = ref.read(ingredientFirestoreServiceProvider);
+
+      final existing = await service.findByBarcode(product.barcode);
+      if (existing != null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('« ${existing.name} » est déjà dans vos ingrédients')),
+        );
+        Navigator.of(context).pop(true);
+        return;
+      }
+
+      await service.addIngredient(
+        name: product.name,
+        caloriesPer100g: product.kcal100g,
+        proteinsPer100g: product.proteins100g,
+        fatsPer100g: product.fats100g,
+        carbsPer100g: product.carbs100g,
+        fibersPer100g: product.fibers100g,
+        saltPer100g: product.salt100g,
+        barcode: product.barcode,
+        category: product.category,
+        nutriscore: product.nutriscore,
+        imageUrl: product.imageUrl,
+        brand: product.brand,
+        visibility: IngredientVisibility.private,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('« ${product.name} » ajouté à vos ingrédients')),
+      );
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de l\'enregistrement : $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final ingredientRepo = ref.watch(ingredientRepositoryProvider);
-
     return Scaffold(
       appBar: AppBar(title: const Text('Scanner un produit')),
       body: Padding(
@@ -113,20 +166,22 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                     children: [
                       Text(_product!.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      Text('Calories /100g : ${_product!.kcal100g}'),
+                      if (_product!.brand != null && _product!.brand!.isNotEmpty)
+                        Text(_product!.brand!, style: const TextStyle(color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      Text(_product!.nutritionSummary),
+                      const Text('(pour 100 g)', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       const SizedBox(height: 12),
                       ElevatedButton(
-                        onPressed: () async {
-                          await ingredientRepo.insertScannedIngredient(
-                            name: _product!.name,
-                            caloriesPer100g: _product!.kcal100g,
-                            barcode: _product!.barcode,
-                          );
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Produit enregistré')));
-                        },
-                        child: const Text('Enregistrer localement'),
-                      )
+                        onPressed: _saving ? null : _saveProduct,
+                        child: _saving
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Ajouter à mes ingrédients'),
+                      ),
                     ],
                   ),
                 ),
