@@ -17,6 +17,7 @@ import '../../models/recette_firestore.dart';
 import 'planning_form_screen.dart';
 import '../../services/meal_consumption_service.dart';
 import '../../widgets/consume_meal_dialog.dart';
+import '../../utils/portion_calculator.dart';
 
 enum PlanningSourceType {
   all,
@@ -564,21 +565,59 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
 
 // 3. Ajoutez cette nouvelle méthode pour consommer un repas:
 
-  Future<void> _consumeMeal(PlanningFirestore planning) async {
-    // Récupérer le profil actif
-    final profile = await _profileRepo.getActiveProfile();
+  /// Détermine QUI mange ce repas (et avec quel coefficient).
+  /// 1) les convives enregistrés dans le planning ; 2) sinon, l'unique profil ;
+  /// 3) sinon, on demande à l'utilisateur de choisir.
+  Future<List<EaterPortion>?> _resolveEaters(PlanningFirestore planning) async {
+    final resolver = ref.read(eaterResolverProvider);
+    final fromPlanning = await resolver.resolve(planning.eaters);
+    if (fromPlanning.isNotEmpty) return fromPlanning;
 
-    if (profile == null) {
+    final profiles = await _profileRepo.getAllProfiles();
+    if (profiles.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Aucun profil actif trouvé'),
+            content: Text('Créez d\'abord un profil (onglet Suivi calorique)'),
             backgroundColor: Colors.red,
           ),
         );
       }
-      return;
+      return null;
     }
+
+    UserProfile? chosen;
+    if (profiles.length == 1) {
+      chosen = profiles.first;
+    } else {
+      if (!mounted) return null;
+      chosen = await showDialog<UserProfile>(
+        context: context,
+        builder: (c) => SimpleDialog(
+          title: const Text('Qui mange ce repas ?'),
+          children: profiles
+              .map((p) => SimpleDialogOption(
+                    onPressed: () => Navigator.pop(c, p),
+                    child: Text(p.name),
+                  ))
+              .toList(),
+        ),
+      );
+    }
+    if (chosen == null) return null;
+
+    return [
+      EaterPortion(
+        profileId: chosen.id,
+        name: chosen.name,
+        multiplier: chosen.eaterMultiplier,
+      ),
+    ];
+  }
+
+  Future<void> _consumeMeal(PlanningFirestore planning) async {
+    final eaters = await _resolveEaters(planning);
+    if (eaters == null || !mounted) return;
 
     // Afficher le dialog de confirmation
     final result = await showDialog<MealConsumptionResult>(
@@ -586,7 +625,7 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
       builder: (context) => ConsumeMealDialog(
         planning: planning,
         consumptionService: ref.read(mealConsumptionServiceProvider),
-        userProfileId: profile.id,
+        eaters: eaters,
       ),
     );
 

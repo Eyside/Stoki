@@ -4,17 +4,18 @@
 import 'package:flutter/material.dart';
 import '../models/planning_firestore.dart';
 import '../services/meal_consumption_service.dart';
+import '../utils/portion_calculator.dart';
 
 class ConsumeMealDialog extends StatefulWidget {
   final PlanningFirestore planning;
   final MealConsumptionService consumptionService;
-  final int userProfileId;
+  final List<EaterPortion> eaters;
 
   const ConsumeMealDialog({
     super.key,
     required this.planning,
     required this.consumptionService,
-    required this.userProfileId,
+    required this.eaters,
   });
 
   @override
@@ -37,8 +38,10 @@ class _ConsumeMealDialogState extends State<ConsumeMealDialog> {
     setState(() => _loading = true);
 
     try {
+      final scale = await widget.consumptionService
+          .computeScale(widget.planning.recetteId, widget.eaters);
       final summary = await widget.consumptionService
-          .getMealConsumptionSummary(widget.planning);
+          .getMealConsumptionSummary(widget.planning, scale: scale);
 
       setState(() {
         _summary = summary;
@@ -64,7 +67,7 @@ class _ConsumeMealDialogState extends State<ConsumeMealDialog> {
     try {
       final result = await widget.consumptionService.consumeMeal(
         planning: widget.planning,
-        userProfileId: widget.userProfileId,
+        eaters: widget.eaters,
         deductFromStock: _deductFromStock,
       );
 

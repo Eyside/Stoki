@@ -3,12 +3,11 @@
 
 import 'package:flutter/foundation.dart';
 import '../models/planning_firestore.dart';
-import '../models/recette_firestore.dart';
 import '../repositories/calorie_tracking_repository.dart';
+import '../utils/portion_calculator.dart';
 import 'planning_firestore_service.dart';
 import 'recette_firestore_service.dart';
 import 'frigo_firestore_service.dart';
-import '../database.dart';
 
 class MealConsumptionResult {
   final bool success;
@@ -57,9 +56,11 @@ class MealConsumptionService {
         _calorieTrackingRepo = calorieTrackingRepo;
 
   /// Vérifie la disponibilité des ingrédients dans le stock
+  /// [scale] = part du repas par rapport à la recette de base (voir PortionCalculator).
   Future<List<IngredientStockAdjustment>> checkStockAvailability(
-      String recetteId,
-      ) async {
+      String recetteId, {
+      double scale = 1.0,
+      }) async {
     final adjustments = <IngredientStockAdjustment>[];
 
     try {
@@ -84,12 +85,13 @@ class MealConsumptionService {
           // TODO: Gérer les conversions d'unités complexes si nécessaire
         }
 
+        final needed = ingredient.quantity * scale;
         adjustments.add(IngredientStockAdjustment(
           ingredientName: ingredient.ingredientName,
-          quantityNeeded: ingredient.quantity,
+          quantityNeeded: needed,
           quantityAvailable: availableQuantity,
           unit: ingredient.unit,
-          sufficient: availableQuantity >= ingredient.quantity,
+          sufficient: availableQuantity >= needed,
         ));
       }
     } catch (e) {
@@ -99,10 +101,22 @@ class MealConsumptionService {
     return adjustments;
   }
 
-  /// Marque un repas comme consommé
+  /// Part totale du repas : somme des coefficients des convives / portions de la recette.
+  Future<double> computeScale(String recetteId, List<EaterPortion> eaters) async {
+    final recette = await _recetteService.getRecetteById(recetteId);
+    return PortionCalculator.mealFactor(
+      multipliers: eaters.map((e) => e.multiplier),
+      recipeServings: recette?.servings ?? 1,
+    );
+  }
+
+  /// Marque un repas comme consommé.
+  /// Règle : la recette = 1 personne normale (x1). Chaque convive reçoit la
+  /// recette multipliée par son coefficient (0,5 / 1 / 1,5), divisée par les
+  /// portions de la recette. Le stock est déduit une seule fois pour tout le repas.
   Future<MealConsumptionResult> consumeMeal({
     required PlanningFirestore planning,
-    required int userProfileId,
+    required List<EaterPortion> eaters,
     bool deductFromStock = true,
   }) async {
     final warnings = <String>[];
@@ -110,10 +124,33 @@ class MealConsumptionService {
     try {
       debugPrint('🍽️ Consommation du repas: ${planning.recetteName}');
 
+      final recette = await _recetteService.getRecetteById(planning.recetteId);
+      final recipeServings = recette?.servings ?? 1;
+      final scale = PortionCalculator.mealFactor(
+        multipliers: eaters.map((e) => e.multiplier),
+        recipeServings: recipeServings,
+      );
+
+      // Seuls les profils retrouvés sur cet appareil peuvent recevoir des calories
+      final trackable = eaters.where((e) => e.known && e.profileId != null).toList();
+      if (trackable.isEmpty) {
+        return MealConsumptionResult(
+          success: false,
+          message: '❌ Aucun profil à qui attribuer les calories. Créez un profil d\'abord.',
+        );
+      }
+      final unknownCount = eaters.length - trackable.length;
+      if (unknownCount > 0) {
+        warnings.add(
+          '⚠️ $unknownCount convive(s) introuvable(s) sur cet appareil : '
+              'leurs calories ne sont pas enregistrées (stock compté x1 pour eux).',
+        );
+      }
+
       // 1. Vérifier la disponibilité du stock si nécessaire
       List<IngredientStockAdjustment>? stockAdjustments;
       if (deductFromStock) {
-        stockAdjustments = await checkStockAvailability(planning.recetteId);
+        stockAdjustments = await checkStockAvailability(planning.recetteId, scale: scale);
 
         // Vérifier s'il y a des ingrédients insuffisants
         final insufficient = stockAdjustments.where((a) => !a.sufficient).toList();
@@ -127,17 +164,31 @@ class MealConsumptionService {
         }
       }
 
-      // 2. Ajouter l'entrée dans le suivi calorique
-      await _calorieTrackingRepo.addTracking(
-        userProfileId: userProfileId,
-        date: planning.date,
-        mealType: planning.mealType,
-        calories: planning.modifiedCalories ?? planning.totalCalories,
-        proteins: planning.modifiedProteins ?? planning.totalProteins,
-        fats: planning.modifiedFats ?? planning.totalFats,
-        carbs: planning.modifiedCarbs ?? planning.totalCarbs,
-        fibers: planning.modifiedFibers ?? planning.totalFibers,
-      );
+      // 2. Ajouter l'entrée dans le suivi calorique de chaque convive
+      final baseCalories = planning.modifiedCalories ?? planning.totalCalories;
+      final baseProteins = planning.modifiedProteins ?? planning.totalProteins;
+      final baseFats = planning.modifiedFats ?? planning.totalFats;
+      final baseCarbs = planning.modifiedCarbs ?? planning.totalCarbs;
+      final baseFibers = planning.modifiedFibers ?? planning.totalFibers;
+
+      final perEaterLines = <String>[];
+      for (final eater in trackable) {
+        final factor = PortionCalculator.eaterFactor(
+          multiplier: eater.multiplier,
+          recipeServings: recipeServings,
+        );
+        await _calorieTrackingRepo.addTracking(
+          userProfileId: eater.profileId!,
+          date: planning.date,
+          mealType: planning.mealType,
+          calories: baseCalories * factor,
+          proteins: baseProteins * factor,
+          fats: baseFats * factor,
+          carbs: baseCarbs * factor,
+          fibers: baseFibers * factor,
+        );
+        perEaterLines.add('${eater.name} : ${(baseCalories * factor).round()} kcal');
+      }
 
       debugPrint('✅ Calories ajoutées au suivi');
 
@@ -149,7 +200,7 @@ class MealConsumptionService {
           await _deductIngredientFromStock(
             ingredientId: ingredient.ingredientId,
             ingredientName: ingredient.ingredientName,
-            quantityNeeded: ingredient.quantity,
+            quantityNeeded: ingredient.quantity * scale,
             unit: ingredient.unit,
           );
         }
@@ -166,8 +217,8 @@ class MealConsumptionService {
       return MealConsumptionResult(
         success: true,
         message: warnings.isEmpty
-            ? '✅ Repas consommé avec succès !'
-            : '✅ Repas consommé (avec avertissements)',
+            ? '✅ Repas consommé ! ${perEaterLines.join(' • ')}'
+            : '✅ Repas consommé (avec avertissements) ${perEaterLines.join(' • ')}',
         warnings: warnings,
         stockAdjustments: stockAdjustments ?? [],
       );
@@ -247,10 +298,11 @@ class MealConsumptionService {
 
   /// Obtient un résumé de consommation pour un repas
   Future<Map<String, dynamic>> getMealConsumptionSummary(
-      PlanningFirestore planning,
-      ) async {
+      PlanningFirestore planning, {
+      double scale = 1.0,
+      }) async {
     final ingredients = await _recetteService.getIngredients(planning.recetteId);
-    final adjustments = await checkStockAvailability(planning.recetteId);
+    final adjustments = await checkStockAvailability(planning.recetteId, scale: scale);
 
     final totalIngredientsCount = ingredients.length;
     final availableCount = adjustments.where((a) => a.sufficient).length;

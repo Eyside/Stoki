@@ -18,6 +18,7 @@ import 'models/frigo_firestore.dart';
 import 'services/shopping_list_v2_generator_service.dart';
 import 'services/ingredient_firestore_service.dart';
 import 'services/meal_consumption_service.dart';
+import 'services/eater_resolver.dart';
 import 'repositories/calorie_tracking_repository.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
@@ -208,8 +209,13 @@ final ingredientFirestoreServiceProvider = Provider<IngredientFirestoreService>(
 // NOUVEAU SERVICE V2 DE GÉNÉRATION DE LISTE (AVEC INGREDIENT SERVICE)
 // ============================================================================
 
+final eaterResolverProvider = Provider<EaterResolver>((ref) {
+  return EaterResolver(ref.watch(userProfileRepositoryProvider));
+});
+
 final shoppingListV2GeneratorServiceProvider = Provider<ShoppingListV2GeneratorService>((ref) {
   return ShoppingListV2GeneratorService(
+    eaterResolver: ref.watch(eaterResolverProvider),
     planningService: ref.watch(planningFirestoreServiceProvider),
     recetteService: ref.watch(recetteFirestoreServiceProvider),
     frigoService: ref.watch(frigoFirestoreServiceProvider),

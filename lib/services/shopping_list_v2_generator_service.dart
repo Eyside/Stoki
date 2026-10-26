@@ -2,13 +2,14 @@
 // Service de génération de liste avec répartition intelligente par source
 // VERSION CLOUD: Utilise IngredientFirestore au lieu d'Ingredient local
 
-import 'dart:convert';
 import '../models/recette_firestore.dart';
 import '../services/planning_firestore_service.dart';
 import '../services/recette_firestore_service.dart';
 import '../services/frigo_firestore_service.dart';
 import '../services/ingredient_firestore_service.dart';
 import '../utils/unit_converter.dart';
+import '../utils/portion_calculator.dart';
+import 'eater_resolver.dart';
 
 /// Item de liste avec origine des besoins
 class ShoppingItemWithOrigin {
@@ -79,8 +80,10 @@ class ShoppingListV2GeneratorService {
   final RecetteFirestoreService recetteService;
   final FrigoFirestoreService frigoService;
   final IngredientFirestoreService ingredientService;
+  final EaterResolver eaterResolver;
 
   ShoppingListV2GeneratorService({
+    required this.eaterResolver,
     required this.planningService,
     required this.recetteService,
     required this.frigoService,
@@ -129,15 +132,13 @@ class ShoppingListV2GeneratorService {
 
           final ingredients = await recetteService.getIngredients(planning.recetteId);
 
-          double servings = 1.0;
-          if (planning.eaters != null && planning.eaters!.isNotEmpty) {
-            try {
-              final eatersList = jsonDecode(planning.eaters!);
-              servings = eatersList.length.toDouble();
-            } catch (e) {
-              print('   ⚠️ Erreur parsing eaters: $e');
-            }
-          }
+          // Règle de portions : la recette = 1 personne normale (x1).
+          // Quantité = somme des coefficients des convives / portions de la recette.
+          final eaters = await eaterResolver.resolve(planning.eaters);
+          final servings = PortionCalculator.mealFactor(
+            multipliers: eaters.map((e) => e.multiplier),
+            recipeServings: recetteDoc.servings,
+          );
 
           for (final ingredient in ingredients) {
             final gramsQuantity = UnitConverter.toGrams(
