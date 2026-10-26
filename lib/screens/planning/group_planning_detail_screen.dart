@@ -433,7 +433,7 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
 
   Widget _buildCloudMealTile(PlanningFirestore planning) {
     final hasModifications = planning.modifiedIngredients != null;
-    final isConsumed = planning.notes?.contains('✅ Consommé') ?? false;
+    final isConsumed = planning.isConsumed;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -522,23 +522,33 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
                 ),
               ],
             ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                _buildMealActionButton(
+                  label: planning.cooked ? 'Cuisiné' : 'Cuisiner',
+                  icon: planning.cooked ? Icons.check_circle : Icons.soup_kitchen,
+                  done: planning.cooked,
+                  color: Colors.amber.shade800,
+                  onPressed: () => _runMealAction(planning, MealAction.cook),
+                ),
+                _buildMealActionButton(
+                  label: isConsumed ? 'Consommé' : 'Consommer',
+                  icon: isConsumed ? Icons.check_circle : Icons.restaurant,
+                  done: isConsumed,
+                  color: Colors.green.shade700,
+                  onPressed: () => _runMealAction(planning, MealAction.consume),
+                ),
+              ],
+            ),
           ],
         ),
         trailing: isConsumed
             ? null
             : PopupMenuButton<String>( // ✅ AJOUTÉ <String>
           itemBuilder: (context) => <PopupMenuEntry<String>>[ // ✅ AJOUTÉ <PopupMenuEntry<String>>
-            const PopupMenuItem<String>( // ✅ AJOUTÉ <String>
-              value: 'consume',
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 20),
-                  SizedBox(width: 12),
-                  Text('Marquer comme consommé'),
-                ],
-              ),
-            ),
-            const PopupMenuDivider(),
             const PopupMenuItem<String>( // ✅ AJOUTÉ <String>
               value: 'delete',
               child: Row(
@@ -551,9 +561,7 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
             ),
           ],
           onSelected: (value) {
-            if (value == 'consume') {
-              _consumeMeal(planning);
-            } else if (value == 'delete') {
+            if (value == 'delete') {
               _deleteCloudMeal(planning);
             }
           },
@@ -615,9 +623,48 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
     ];
   }
 
-  Future<void> _consumeMeal(PlanningFirestore planning) async {
-    final eaters = await _resolveEaters(planning);
+  /// Petit bouton d'action d'un repas (Cuisiner / Consommer).
+  Widget _buildMealActionButton({
+    required String label,
+    required IconData icon,
+    required bool done,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      height: 30,
+      child: done
+          ? Chip(
+              avatar: Icon(icon, size: 16, color: Colors.white),
+              label: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
+              backgroundColor: color,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+            )
+          : OutlinedButton.icon(
+              onPressed: onPressed,
+              icon: Icon(icon, size: 16, color: color),
+              label: Text(label, style: TextStyle(color: color, fontSize: 11)),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: color),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+    );
+  }
+
+  /// Lance « Cuisiner » (déduction du stock) ou « Consommer » (calcul calorique).
+  Future<void> _runMealAction(PlanningFirestore planning, MealAction action) async {
+    List<EaterPortion>? eaters;
+    if (action == MealAction.cook) {
+      // Pour le stock, pas besoin de choisir un profil : sans convive, on compte 1 personne.
+      eaters = await ref.read(eaterResolverProvider).resolve(planning.eaters);
+    } else {
+      eaters = await _resolveEaters(planning);
+    }
     if (eaters == null || !mounted) return;
+    final resolvedEaters = eaters;
 
     // Afficher le dialog de confirmation
     final result = await showDialog<MealConsumptionResult>(
@@ -625,7 +672,8 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
       builder: (context) => ConsumeMealDialog(
         planning: planning,
         consumptionService: ref.read(mealConsumptionServiceProvider),
-        eaters: eaters,
+        eaters: resolvedEaters,
+        action: action,
       ),
     );
 
@@ -647,7 +695,7 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
             ],
           ),
           backgroundColor: color,
-          duration: const Duration(seconds: 4),
+          duration: const Duration(seconds: 6),
           action: result.warnings.isNotEmpty
               ? SnackBarAction(
             label: 'Détails',
@@ -684,7 +732,7 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
               const SizedBox(height: 16),
               if (result.warnings.isNotEmpty) ...[
                 const Text(
-                  'Avertissements:',
+                  'Informations :',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),

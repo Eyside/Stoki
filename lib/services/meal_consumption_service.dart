@@ -1,10 +1,19 @@
 // lib/services/meal_consumption_service.dart
-// Service pour gérer la consommation des repas planifiés
+// Deux actions distinctes sur un repas planifié :
+//   • CUISINER   = déduire les ingrédients du stock
+//   • CONSOMMER  = ajouter les calories au suivi calorique de chaque convive
+//
+// Règle de portions (voir PortionCalculator) : la recette représente une
+// personne normale (x1) ; chaque convive reçoit la recette multipliée par son
+// coefficient, divisée par les portions de la recette.
 
 import 'package:flutter/foundation.dart';
+import '../models/frigo_firestore.dart';
 import '../models/planning_firestore.dart';
+import '../models/recette_firestore.dart';
 import '../repositories/calorie_tracking_repository.dart';
 import '../utils/portion_calculator.dart';
+import '../utils/unit_converter.dart';
 import 'planning_firestore_service.dart';
 import 'recette_firestore_service.dart';
 import 'frigo_firestore_service.dart';
@@ -45,6 +54,9 @@ class MealConsumptionService {
   final FrigoFirestoreService _frigoService;
   final CalorieTrackingRepository _calorieTrackingRepo;
 
+  /// Tolérance (en grammes) pour éviter les erreurs d'arrondi.
+  static const double _epsilonGrams = 0.001;
+
   MealConsumptionService({
     required PlanningFirestoreService planningService,
     required RecetteFirestoreService recetteService,
@@ -55,43 +67,103 @@ class MealConsumptionService {
         _frigoService = frigoService,
         _calorieTrackingRepo = calorieTrackingRepo;
 
-  /// Vérifie la disponibilité des ingrédients dans le stock
-  /// [scale] = part du repas par rapport à la recette de base (voir PortionCalculator).
+  // ==========================================================================
+  // OUTILS
+  // ==========================================================================
+
+  /// Nombre de portions prévues par la recette (1 si introuvable).
+  Future<int> getRecipeServings(String recetteId) async {
+    final recette = await _recetteService.getRecetteById(recetteId);
+    return recette?.servings ?? 1;
+  }
+
+  /// Part totale du repas : somme des coefficients des convives / portions de la recette.
+  Future<double> computeScale(String recetteId, List<EaterPortion> eaters) async {
+    return PortionCalculator.mealFactor(
+      multipliers: eaters.map((e) => e.multiplier),
+      recipeServings: await getRecipeServings(recetteId),
+    );
+  }
+
+  /// Convertit une quantité en grammes (les unités inconnues sont traitées comme des grammes).
+  double _toGrams(
+      double quantity,
+      String unit, {
+        double? weightPerPieceGrams,
+        double? densityGPerMl,
+      }) {
+    return UnitConverter.toGrams(
+      quantity: quantity,
+      unit: unit,
+      weightPerPieceGrams: weightPerPieceGrams,
+      densityGramsPerMl: densityGPerMl ?? 1.0,
+    );
+  }
+
+  /// Quantité d'un article de stock en grammes.
+  /// On utilise les infos de conversion du stock, sinon celles de la recette.
+  double _stockItemGrams(FrigoFirestore item, RecetteIngredientFirestore ingredient) {
+    return _toGrams(
+      item.quantity,
+      item.unit,
+      weightPerPieceGrams: item.avgWeightPerUnitG ?? ingredient.avgWeightPerUnitG,
+      densityGPerMl: item.densityGPerMl ?? ingredient.densityGPerMl,
+    );
+  }
+
+  /// Articles du stock qui correspondent à un ingrédient de recette.
+  List<FrigoFirestore> _matchingStock(
+      List<FrigoFirestore> stock,
+      RecetteIngredientFirestore ingredient,
+      ) {
+    return stock.where((item) => item.ingredientId == ingredient.ingredientId).toList();
+  }
+
+  // ==========================================================================
+  // VÉRIFICATION DU STOCK (avec conversion des unités)
+  // ==========================================================================
+
+  /// [scale] = part du repas par rapport à la recette de base.
   Future<List<IngredientStockAdjustment>> checkStockAvailability(
       String recetteId, {
-      double scale = 1.0,
+        double scale = 1.0,
       }) async {
     final adjustments = <IngredientStockAdjustment>[];
 
     try {
-      // Récupérer les ingrédients de la recette
       final ingredients = await _recetteService.getIngredients(recetteId);
-
-      // Récupérer tout le stock disponible
       final stock = await _frigoService.getAllMyStocks().first;
 
       for (final ingredient in ingredients) {
-        // Chercher l'ingrédient dans le stock
-        final stockItem = stock.where(
-              (item) => item.ingredientId == ingredient.ingredientId,
-        ).toList();
+        final neededQuantity = ingredient.quantity * scale;
+        final neededGrams = _toGrams(
+          neededQuantity,
+          ingredient.unit,
+          weightPerPieceGrams: ingredient.avgWeightPerUnitG,
+          densityGPerMl: ingredient.densityGPerMl,
+        );
 
-        double availableQuantity = 0;
-        for (final item in stockItem) {
-          // Convertir les unités si nécessaire
-          if (item.unit == ingredient.unit) {
-            availableQuantity += item.quantity;
-          }
-          // TODO: Gérer les conversions d'unités complexes si nécessaire
+        var availableGrams = 0.0;
+        for (final item in _matchingStock(stock, ingredient)) {
+          availableGrams += _stockItemGrams(item, ingredient);
         }
 
-        final needed = ingredient.quantity * scale;
+        // Affichage dans l'unité de la recette
+        final gramsPerRecipeUnit = _toGrams(
+          1,
+          ingredient.unit,
+          weightPerPieceGrams: ingredient.avgWeightPerUnitG,
+          densityGPerMl: ingredient.densityGPerMl,
+        );
+        final availableQuantity =
+        gramsPerRecipeUnit > 0 ? availableGrams / gramsPerRecipeUnit : 0.0;
+
         adjustments.add(IngredientStockAdjustment(
           ingredientName: ingredient.ingredientName,
-          quantityNeeded: needed,
+          quantityNeeded: neededQuantity,
           quantityAvailable: availableQuantity,
           unit: ingredient.unit,
-          sufficient: availableQuantity >= needed,
+          sufficient: availableGrams + _epsilonGrams >= neededGrams,
         ));
       }
     } catch (e) {
@@ -101,35 +173,171 @@ class MealConsumptionService {
     return adjustments;
   }
 
-  /// Part totale du repas : somme des coefficients des convives / portions de la recette.
-  Future<double> computeScale(String recetteId, List<EaterPortion> eaters) async {
-    final recette = await _recetteService.getRecetteById(recetteId);
-    return PortionCalculator.mealFactor(
-      multipliers: eaters.map((e) => e.multiplier),
-      recipeServings: recette?.servings ?? 1,
-    );
+  // ==========================================================================
+  // CUISINER = déduction du stock
+  // ==========================================================================
+
+  /// Déduit du stock les ingrédients du repas (pour tous les convives).
+  /// Si le stock est insuffisant, on déduit ce qui existe et on le signale
+  /// par un message d'information (jamais bloquant).
+  Future<MealConsumptionResult> cookMeal({
+    required PlanningFirestore planning,
+    required List<EaterPortion> eaters,
+  }) async {
+    if (planning.cooked) {
+      return MealConsumptionResult(
+        success: false,
+        message: 'ℹ️ Ce repas est déjà marqué comme cuisiné.',
+      );
+    }
+
+    final infos = <String>[];
+
+    try {
+      debugPrint('🍳 Cuisson du repas: ${planning.recetteName}');
+
+      final scale = await computeScale(planning.recetteId, eaters);
+
+      final unknownCount = eaters.where((e) => !e.known).length;
+      if (unknownCount > 0) {
+        infos.add(
+          'ℹ️ $unknownCount convive(s) introuvable(s) sur cet appareil : comptés comme une personne normale.',
+        );
+      }
+
+      final ingredients = await _recetteService.getIngredients(planning.recetteId);
+      final stock = await _frigoService.getAllMyStocks().first;
+
+      for (final ingredient in ingredients) {
+        final missing = await _deductIngredientFromStock(
+          ingredient: ingredient,
+          scale: scale,
+          stock: stock,
+        );
+        if (missing > 0.001) {
+          infos.add(
+            'ℹ️ ${ingredient.ingredientName} : ${missing.toStringAsFixed(missing < 10 ? 1 : 0)} ${ingredient.unit} '
+                'non déduit(s) (pas assez en stock).',
+          );
+        }
+      }
+
+      await _planningService.markCooked(planning.id);
+
+      return MealConsumptionResult(
+        success: true,
+        message: '🍳 Repas cuisiné : stock mis à jour.',
+        warnings: infos,
+      );
+    } catch (e, stackTrace) {
+      debugPrint('❌ Erreur lors de la cuisson du repas: $e');
+      debugPrint('Stack: $stackTrace');
+      return MealConsumptionResult(
+        success: false,
+        message: '❌ Erreur: $e',
+        warnings: infos,
+      );
+    }
   }
 
-  /// Marque un repas comme consommé.
-  /// Règle : la recette = 1 personne normale (x1). Chaque convive reçoit la
-  /// recette multipliée par son coefficient (0,5 / 1 / 1,5), divisée par les
-  /// portions de la recette. Le stock est déduit une seule fois pour tout le repas.
+  /// Déduit un ingrédient du stock (FIFO : on commence par ce qui périme en premier).
+  /// Retourne la quantité manquante, exprimée dans l'unité de la recette (0 si tout est couvert).
+  Future<double> _deductIngredientFromStock({
+    required RecetteIngredientFirestore ingredient,
+    required double scale,
+    required List<FrigoFirestore> stock,
+  }) async {
+    final items = _matchingStock(stock, ingredient);
+
+    var remainingGrams = _toGrams(
+      ingredient.quantity * scale,
+      ingredient.unit,
+      weightPerPieceGrams: ingredient.avgWeightPerUnitG,
+      densityGPerMl: ingredient.densityGPerMl,
+    );
+
+    items.sort((a, b) {
+      if (a.bestBefore == null && b.bestBefore == null) return 0;
+      if (a.bestBefore == null) return 1;
+      if (b.bestBefore == null) return -1;
+      return a.bestBefore!.compareTo(b.bestBefore!);
+    });
+
+    for (final item in items) {
+      if (remainingGrams <= _epsilonGrams) break;
+
+      final itemGrams = _stockItemGrams(item, ingredient);
+      if (itemGrams <= _epsilonGrams) continue;
+
+      if (itemGrams <= remainingGrams + _epsilonGrams) {
+        // Tout l'article est consommé
+        await _frigoService.deleteFrigoItem(item.id);
+        remainingGrams -= itemGrams;
+        debugPrint('🗑️ Article supprimé: ${item.quantity} ${item.unit} de ${item.ingredientName}');
+      } else {
+        // On retire seulement une partie : la quantité restante garde l'unité de l'article
+        final leftGrams = itemGrams - remainingGrams;
+        final newQuantity = item.quantity * (leftGrams / itemGrams);
+        await _frigoService.updateFrigoItem(
+          frigoId: item.id,
+          quantity: newQuantity,
+          unit: item.unit,
+          location: item.location,
+          bestBefore: item.bestBefore,
+        );
+        remainingGrams = 0;
+        debugPrint('📉 ${item.ingredientName}: ${item.quantity} → $newQuantity ${item.unit}');
+      }
+    }
+
+    if (remainingGrams <= _epsilonGrams) return 0;
+
+    final gramsPerRecipeUnit = _toGrams(
+      1,
+      ingredient.unit,
+      weightPerPieceGrams: ingredient.avgWeightPerUnitG,
+      densityGPerMl: ingredient.densityGPerMl,
+    );
+    return gramsPerRecipeUnit > 0 ? remainingGrams / gramsPerRecipeUnit : remainingGrams;
+  }
+
+  // ==========================================================================
+  // CONSOMMER = calcul calorique
+  // ==========================================================================
+
+  /// Calories (et macros) de chaque convive pour ce repas, sans rien enregistrer.
+  Future<Map<EaterPortion, double>> previewCalories({
+    required PlanningFirestore planning,
+    required List<EaterPortion> eaters,
+  }) async {
+    final servings = await getRecipeServings(planning.recetteId);
+    final base = planning.modifiedCalories ?? planning.totalCalories;
+    return {
+      for (final e in eaters)
+        e: base *
+            PortionCalculator.eaterFactor(
+              multiplier: e.multiplier,
+              recipeServings: servings,
+            ),
+    };
+  }
+
+  /// Ajoute au suivi calorique de chaque convive sa part du repas.
   Future<MealConsumptionResult> consumeMeal({
     required PlanningFirestore planning,
     required List<EaterPortion> eaters,
-    bool deductFromStock = true,
   }) async {
+    if (planning.isConsumed) {
+      return MealConsumptionResult(
+        success: false,
+        message: 'ℹ️ Ce repas est déjà marqué comme consommé.',
+      );
+    }
+
     final warnings = <String>[];
 
     try {
       debugPrint('🍽️ Consommation du repas: ${planning.recetteName}');
-
-      final recette = await _recetteService.getRecetteById(planning.recetteId);
-      final recipeServings = recette?.servings ?? 1;
-      final scale = PortionCalculator.mealFactor(
-        multipliers: eaters.map((e) => e.multiplier),
-        recipeServings: recipeServings,
-      );
 
       // Seuls les profils retrouvés sur cet appareil peuvent recevoir des calories
       final trackable = eaters.where((e) => e.known && e.profileId != null).toList();
@@ -142,29 +350,12 @@ class MealConsumptionService {
       final unknownCount = eaters.length - trackable.length;
       if (unknownCount > 0) {
         warnings.add(
-          '⚠️ $unknownCount convive(s) introuvable(s) sur cet appareil : '
-              'leurs calories ne sont pas enregistrées (stock compté x1 pour eux).',
+          'ℹ️ $unknownCount convive(s) introuvable(s) sur cet appareil : '
+              'leurs calories ne sont pas enregistrées.',
         );
       }
 
-      // 1. Vérifier la disponibilité du stock si nécessaire
-      List<IngredientStockAdjustment>? stockAdjustments;
-      if (deductFromStock) {
-        stockAdjustments = await checkStockAvailability(planning.recetteId, scale: scale);
-
-        // Vérifier s'il y a des ingrédients insuffisants
-        final insufficient = stockAdjustments.where((a) => !a.sufficient).toList();
-        if (insufficient.isNotEmpty) {
-          for (final adj in insufficient) {
-            warnings.add(
-              '⚠️ ${adj.ingredientName}: seulement ${adj.quantityAvailable} ${adj.unit} '
-                  'disponible(s) (${adj.quantityNeeded} ${adj.unit} nécessaire(s))',
-            );
-          }
-        }
-      }
-
-      // 2. Ajouter l'entrée dans le suivi calorique de chaque convive
+      final recipeServings = await getRecipeServings(planning.recetteId);
       final baseCalories = planning.modifiedCalories ?? planning.totalCalories;
       final baseProteins = planning.modifiedProteins ?? planning.totalProteins;
       final baseFats = planning.modifiedFats ?? planning.totalFats;
@@ -190,42 +381,16 @@ class MealConsumptionService {
         perEaterLines.add('${eater.name} : ${(baseCalories * factor).round()} kcal');
       }
 
-      debugPrint('✅ Calories ajoutées au suivi');
-
-      // 3. Déduire les quantités du stock
-      if (deductFromStock && stockAdjustments != null) {
-        final ingredients = await _recetteService.getIngredients(planning.recetteId);
-
-        for (final ingredient in ingredients) {
-          await _deductIngredientFromStock(
-            ingredientId: ingredient.ingredientId,
-            ingredientName: ingredient.ingredientName,
-            quantityNeeded: ingredient.quantity * scale,
-            unit: ingredient.unit,
-          );
-        }
-
-        debugPrint('✅ Stock mis à jour');
-      }
-
-      // 4. Marquer le planning comme consommé (on pourrait ajouter un champ)
-      await _planningService.updatePlanning(
-        planningId: planning.id,
-        notes: '✅ Consommé le ${DateTime.now().day}/${DateTime.now().month}',
-      );
+      await _planningService.markConsumed(planning.id);
 
       return MealConsumptionResult(
         success: true,
-        message: warnings.isEmpty
-            ? '✅ Repas consommé ! ${perEaterLines.join(' • ')}'
-            : '✅ Repas consommé (avec avertissements) ${perEaterLines.join(' • ')}',
+        message: '🍽️ Repas consommé ! ${perEaterLines.join(' • ')}',
         warnings: warnings,
-        stockAdjustments: stockAdjustments ?? [],
       );
     } catch (e, stackTrace) {
       debugPrint('❌ Erreur lors de la consommation du repas: $e');
       debugPrint('Stack: $stackTrace');
-
       return MealConsumptionResult(
         success: false,
         message: '❌ Erreur: $e',
@@ -234,77 +399,14 @@ class MealConsumptionService {
     }
   }
 
-  /// Déduit un ingrédient du stock
-  Future<void> _deductIngredientFromStock({
-    required String ingredientId,
-    required String ingredientName,
-    required double quantityNeeded,
-    required String unit,
-  }) async {
-    // Récupérer tous les items de cet ingrédient dans le stock
-    final stock = await _frigoService.getAllMyStocks().first;
-    final items = stock
-        .where((item) => item.ingredientId == ingredientId)
-        .toList();
-
-    if (items.isEmpty) {
-      debugPrint('⚠️ Ingrédient non trouvé dans le stock: $ingredientName');
-      return;
-    }
-
-    double remainingNeeded = quantityNeeded;
-
-    // Déduire des items existants (FIFO - First In, First Out)
-    items.sort((a, b) {
-      if (a.bestBefore == null && b.bestBefore == null) return 0;
-      if (a.bestBefore == null) return 1;
-      if (b.bestBefore == null) return -1;
-      return a.bestBefore!.compareTo(b.bestBefore!);
-    });
-
-    for (final item in items) {
-      if (remainingNeeded <= 0) break;
-
-      if (item.unit != unit) {
-        // TODO: Gérer les conversions d'unités
-        debugPrint('⚠️ Unité différente pour ${item.ingredientName}: ${item.unit} vs $unit');
-        continue;
-      }
-
-      if (item.quantity <= remainingNeeded) {
-        // Supprimer l'item entièrement
-        await _frigoService.deleteFrigoItem(item.id);
-        remainingNeeded -= item.quantity;
-        debugPrint('🗑️ Item supprimé: ${item.quantity} ${item.unit} de ${item.ingredientName}');
-      } else {
-        // Réduire la quantité
-        final newQuantity = item.quantity - remainingNeeded;
-        await _frigoService.updateFrigoItem(
-          frigoId: item.id,
-          quantity: newQuantity,
-          unit: item.unit,
-          location: item.location,
-          bestBefore: item.bestBefore,
-        );
-        remainingNeeded = 0;
-        debugPrint('📉 Quantité réduite: ${item.quantity} → $newQuantity ${item.unit} de ${item.ingredientName}');
-      }
-    }
-
-    if (remainingNeeded > 0) {
-      debugPrint('⚠️ Stock insuffisant: il manque encore $remainingNeeded $unit de $ingredientName');
-    }
-  }
-
-  /// Obtient un résumé de consommation pour un repas
+  /// Résumé du stock pour un repas (utilisé par la fenêtre « Cuisiné »).
   Future<Map<String, dynamic>> getMealConsumptionSummary(
       PlanningFirestore planning, {
-      double scale = 1.0,
+        double scale = 1.0,
       }) async {
-    final ingredients = await _recetteService.getIngredients(planning.recetteId);
     final adjustments = await checkStockAvailability(planning.recetteId, scale: scale);
 
-    final totalIngredientsCount = ingredients.length;
+    final totalIngredientsCount = adjustments.length;
     final availableCount = adjustments.where((a) => a.sufficient).length;
     final missingCount = totalIngredientsCount - availableCount;
 

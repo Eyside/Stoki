@@ -37,6 +37,15 @@ class PlanningFirestore {
   final double? modifiedFibers;
 
   final String? notes;
+
+  /// Repas cuisiné : le stock a été déduit.
+  final bool cooked;
+  final DateTime? cookedAt;
+
+  /// Repas consommé : les calories ont été ajoutées au suivi.
+  final bool consumed;
+  final DateTime? consumedAt;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -62,9 +71,16 @@ class PlanningFirestore {
     this.modifiedCarbs,
     this.modifiedFibers,
     this.notes,
+    this.cooked = false,
+    this.cookedAt,
+    this.consumed = false,
+    this.consumedAt,
     required this.createdAt,
     required this.updatedAt,
   });
+
+  /// Vrai si le repas est consommé (nouveau champ, ou ancien marquage dans les notes).
+  bool get isConsumed => consumed || (notes?.contains('✅ Consommé') ?? false);
 
   factory PlanningFirestore.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -103,6 +119,10 @@ class PlanningFirestore {
           ? (data['modifiedFibers'] as num).toDouble()
           : null,
       notes: data['notes'],
+      cooked: data['cooked'] == true,
+      cookedAt: (data['cookedAt'] as Timestamp?)?.toDate(),
+      consumed: data['consumed'] == true,
+      consumedAt: (data['consumedAt'] as Timestamp?)?.toDate(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -130,6 +150,10 @@ class PlanningFirestore {
       'modifiedCarbs': modifiedCarbs,
       'modifiedFibers': modifiedFibers,
       'notes': notes,
+      'cooked': cooked,
+      'cookedAt': cookedAt != null ? Timestamp.fromDate(cookedAt!) : null,
+      'consumed': consumed,
+      'consumedAt': consumedAt != null ? Timestamp.fromDate(consumedAt!) : null,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -172,6 +196,10 @@ class PlanningFirestore {
     double? modifiedCarbs,
     double? modifiedFibers,
     String? notes,
+    bool? cooked,
+    DateTime? cookedAt,
+    bool? consumed,
+    DateTime? consumedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -197,6 +225,10 @@ class PlanningFirestore {
       modifiedCarbs: modifiedCarbs ?? this.modifiedCarbs,
       modifiedFibers: modifiedFibers ?? this.modifiedFibers,
       notes: notes ?? this.notes,
+      cooked: cooked ?? this.cooked,
+      cookedAt: cookedAt ?? this.cookedAt,
+      consumed: consumed ?? this.consumed,
+      consumedAt: consumedAt ?? this.consumedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

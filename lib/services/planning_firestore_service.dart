@@ -253,6 +253,25 @@ class PlanningFirestoreService {
   }
 
   // ============================================================================
+  // ÉTAT DU REPAS : CUISINÉ / CONSOMMÉ
+  // ============================================================================
+  Future<void> markCooked(String planningId) async {
+    await _planningCollection.doc(planningId).update({
+      'cooked': true,
+      'cookedAt': Timestamp.fromDate(DateTime.now()),
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  Future<void> markConsumed(String planningId) async {
+    await _planningCollection.doc(planningId).update({
+      'consumed': true,
+      'consumedAt': Timestamp.fromDate(DateTime.now()),
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  // ============================================================================
   // SUPPRIMER UN REPAS
   // ============================================================================
   Future<void> deletePlanning(String planningId) async {
