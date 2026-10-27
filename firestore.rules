@@ -1,0 +1,274 @@
+rules_version = '2';
+
+// ============================================================================
+// STOKI - Règles de sécurité Firestore (NIVEAU 1)
+//
+// Objectif : fermer les failles les plus graves SANS modifier le code de
+// l'application. Le NIVEAU 2 (invitations, recettes de groupe, emails) viendra
+// avec la migration des profils vers Firestore.
+//
+// À coller dans : console Firebase > Firestore Database > Règles > Publier.
+// Gardez une copie de vos anciennes règles avant de publier.
+// ============================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------
+    // Fonctions utilitaires
+    // ------------------------------------------------------------------------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Je suis membre du groupe
+    function isMember(groupId) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+
+    // Je suis administrateur du groupe
+    function isGroupAdmin(groupId) {
+      return isMember(groupId) &&
+        get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Je peux modifier cette recette (propriétaire, ou recette de groupe dont je suis membre)
+    function canEditRecette(recetteId) {
+      let r = get(/databases/$(database)/documents/recettes/$(recetteId)).data;
+      return r.ownerId == request.auth.uid ||
+        (r.visibility == 'group' && r.groupId != null && isMember(r.groupId));
+    }
+
+    // ------------------------------------------------------------------------
+    // Utilisateurs
+    // (NIVEAU 2 : ne plus exposer les emails aux autres utilisateurs)
+    // ------------------------------------------------------------------------
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow write: if isUser(userId);
+    }
+
+    // ------------------------------------------------------------------------
+    // Groupes
+    // (NIVEAU 2 : la lecture reste ouverte tant que la recherche par code
+    //  d'invitation lit la collection ; elle sera remplacée par des invitations)
+    // ------------------------------------------------------------------------
+    match /groups/{groupId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn() &&
+        request.resource.data.createdBy == request.auth.uid;
+
+      // Un administrateur modifie tout ; n'importe qui connecté peut
+      // seulement ajuster le compteur de membres (rejoindre / quitter).
+      allow update: if isGroupAdmin(groupId) ||
+        (signedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount']));
+
+      allow delete: if isGroupAdmin(groupId);
+
+      // ----- Membres du groupe -----
+      match /members/{memberId} {
+        // Je peux lire ma propre fiche (pour savoir si je suis déjà membre)
+        allow get: if isUser(memberId) || isMember(groupId);
+        allow list: if isMember(groupId);
+
+        // Je m'ajoute moi-même ; administrateur seulement si j'ai créé le groupe
+        allow create: if isUser(memberId) &&
+          request.resource.data.userId == request.auth.uid &&
+          (request.resource.data.role == 'member' ||
+           (request.resource.data.role == 'admin' &&
+            get(/databases/$(database)/documents/groups/$(groupId)).data.createdBy == request.auth.uid));
+
+        // Transfert des droits d'administrateur
+        allow update: if isGroupAdmin(groupId);
+
+        // Je me retire moi-même, ou un administrateur retire un membre
+        allow delete: if isUser(memberId) || isGroupAdmin(groupId);
+      }
+
+      // ----- Profils (données de santé : taille, poids, âge...) -----
+      // Visibles uniquement par les membres du groupe.
+      match /profiles/{profileId} {
+        allow read: if isMember(groupId);
+
+        allow create: if isMember(groupId) &&
+          request.resource.data.userId == request.auth.uid;
+
+        allow update: if isMember(groupId) &&
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.userId == request.auth.uid;
+
+        // Je peux toujours supprimer mes propres profils, même après avoir quitté le groupe
+        allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+      }
+    }
+
+    // Requête « mes groupes » : collectionGroup('members').where('userId', '==', uid)
+    match /{path=**}/members/{memberId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ------------------------------------------------------------------------
+    // Ingrédients
+    // ------------------------------------------------------------------------
+    match /ingredients/{ingredientId} {
+      allow read: if signedIn() && (
+        resource.data.visibility == 'public' ||
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      );
+
+      allow create: if signedIn() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        (request.resource.data.visibility == 'private' ||
+         request.resource.data.visibility == 'public' ||
+         (request.resource.data.visibility == 'group' &&
+          request.resource.data.groupId != null &&
+          isMember(request.resource.data.groupId)));
+
+      allow update: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      ) && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // ------------------------------------------------------------------------
+    // Recettes
+    // (NIVEAU 2 : la lecture reste ouverte aux utilisateurs connectés, car un
+    //  repas de groupe peut référencer la recette privée d'un autre membre)
+    // ------------------------------------------------------------------------
+    match /recettes/{recetteId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        (request.resource.data.visibility != 'group' ||
+         (request.resource.data.groupId != null && isMember(request.resource.data.groupId)));
+
+      allow update: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      );
+
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      // Ingrédients de la recette : mêmes droits que la recette
+      match /ingredients/{ingredientId} {
+        allow read: if signedIn();
+        allow write: if signedIn() && canEditRecette(recetteId);
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // Planning
+    // ------------------------------------------------------------------------
+    match /planning/{planningId} {
+      allow read: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      );
+
+      allow create: if signedIn() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        (request.resource.data.visibility == 'private' ||
+         (request.resource.data.visibility == 'group' &&
+          request.resource.data.groupId != null &&
+          isMember(request.resource.data.groupId)));
+
+      allow update: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      ) && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // Stock (frigo)
+    // ------------------------------------------------------------------------
+    match /frigo/{frigoId} {
+      allow read: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      );
+
+      allow create: if signedIn() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        (request.resource.data.visibility == 'private' ||
+         (request.resource.data.visibility == 'group' &&
+          request.resource.data.groupId != null &&
+          isMember(request.resource.data.groupId)));
+
+      allow update: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      ) && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // Liste de courses
+    // ------------------------------------------------------------------------
+    match /shopping_list/{itemId} {
+      allow read: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      );
+
+      allow create: if signedIn() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        (request.resource.data.visibility == 'private' ||
+         (request.resource.data.visibility == 'group' &&
+          request.resource.data.groupId != null &&
+          isMember(request.resource.data.groupId)));
+
+      allow update: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      ) && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      );
+    }
+  }
+}
