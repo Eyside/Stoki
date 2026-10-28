@@ -5,7 +5,6 @@ import 'repositories/ingredient_repository.dart';
 import 'repositories/frigo_repository.dart';
 import 'repositories/recette_repository.dart';
 import 'repositories/planning_repository.dart';
-import 'repositories/user_profile_repository.dart';
 import 'services/shopping_list_generator_service.dart';
 import 'services/shopping_list_cloud_service.dart';
 import 'services/planning_firestore_service.dart';
@@ -13,13 +12,13 @@ import 'services/recette_firestore_service.dart';
 import 'services/frigo_firestore_service.dart';
 import 'services/recette_sync_service.dart';
 import 'services/auth_service.dart';
-import 'services/group_profile_service.dart';
+import 'services/profile_firestore_service.dart';
+import 'services/calorie_tracking_firestore_service.dart';
 import 'models/frigo_firestore.dart';
 import 'services/shopping_list_v2_generator_service.dart';
 import 'services/ingredient_firestore_service.dart';
 import 'services/meal_consumption_service.dart';
 import 'services/eater_resolver.dart';
-import 'repositories/calorie_tracking_repository.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   return AppDatabase();
@@ -46,11 +45,6 @@ final planningRepositoryProvider = Provider<PlanningRepository>((ref) {
   return PlanningRepository(db);
 });
 
-final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {
-  final db = ref.watch(databaseProvider);
-  final groupProfileService = ref.watch(groupProfileServiceProvider);
-  return UserProfileRepository(db, groupProfileService: groupProfileService);
-});
 
 // ============================================================================
 // SERVICES CLOUD
@@ -76,8 +70,12 @@ final frigoFirestoreServiceProvider = Provider<FrigoFirestoreService>((ref) {
   return FrigoFirestoreService();
 });
 
-final groupProfileServiceProvider = Provider<GroupProfileService>((ref) {
-  return GroupProfileService();
+final profileFirestoreServiceProvider = Provider<ProfileFirestoreService>((ref) {
+  return ProfileFirestoreService();
+});
+
+final calorieTrackingFirestoreServiceProvider = Provider<CalorieTrackingFirestoreService>((ref) {
+  return CalorieTrackingFirestoreService();
 });
 
 // Service de synchronisation des recettes
@@ -210,7 +208,7 @@ final ingredientFirestoreServiceProvider = Provider<IngredientFirestoreService>(
 // ============================================================================
 
 final eaterResolverProvider = Provider<EaterResolver>((ref) {
-  return EaterResolver(ref.watch(userProfileRepositoryProvider));
+  return EaterResolver(ref.watch(profileFirestoreServiceProvider));
 });
 
 final shoppingListV2GeneratorServiceProvider = Provider<ShoppingListV2GeneratorService>((ref) {
@@ -242,15 +240,6 @@ final expiringStockCountProvider = StreamProvider<int>((ref) {
 });
 
 // ============================================================================
-// CALORIE TRACKING REPOSITORY
-// ============================================================================
-
-final calorieTrackingRepositoryProvider = Provider<CalorieTrackingRepository>((ref) {
-  final db = ref.watch(databaseProvider);
-  return CalorieTrackingRepository(db);
-});
-
-// ============================================================================
 // MEAL CONSUMPTION SERVICE
 // ============================================================================
 
@@ -259,7 +248,7 @@ final mealConsumptionServiceProvider = Provider<MealConsumptionService>((ref) {
     planningService: ref.watch(planningFirestoreServiceProvider),
     recetteService: ref.watch(recetteFirestoreServiceProvider),
     frigoService: ref.watch(frigoFirestoreServiceProvider),
-    calorieTrackingRepo: ref.watch(calorieTrackingRepositoryProvider),
+    calorieTrackingService: ref.watch(calorieTrackingFirestoreServiceProvider),
   );
 });
 

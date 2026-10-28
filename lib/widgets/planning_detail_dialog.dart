@@ -1,6 +1,7 @@
 // lib/widgets/planning_detail_dialog.dart
 import 'package:flutter/material.dart';
 import '../database.dart';
+import '../models/app_profile.dart';
 import '../models/recette_firestore.dart';
 
 /// Dialogue détaillé pour afficher les informations nutritionnelles
@@ -10,7 +11,7 @@ class PlanningDetailDialog extends StatelessWidget {
   final int servings;
   final Map<String, double> nutrition;
   final List<dynamic> ingredients; // RecetteIngredient ou RecetteIngredientFirestore
-  final UserProfile? userProfile;
+  final AppProfile? userProfile;
   final VoidCallback? onEdit;
 
   const PlanningDetailDialog({

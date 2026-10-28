@@ -37,11 +37,12 @@ void main() {
     });
 
     test('lecture des convives', () {
-      expect(PortionCalculator.parseEaterIds('1,2,3'), [1, 2, 3]);
-      expect(PortionCalculator.parseEaterIds('[1, 2]'), [1, 2]);
-      expect(PortionCalculator.parseEaterIds(''), isEmpty);
-      expect(PortionCalculator.parseEaterIds(null), isEmpty);
-      expect(PortionCalculator.parseEaterIds('a,2'), [2]);
+      expect(PortionCalculator.parseEaterUids('uidA,uidB'), ['uidA', 'uidB']);
+      expect(PortionCalculator.parseEaterUids('[uidA, uidB]'), ['uidA', 'uidB']);
+      expect(PortionCalculator.parseEaterUids(''), isEmpty);
+      expect(PortionCalculator.parseEaterUids(null), isEmpty);
+      expect(PortionCalculator.parseEaterUids('uidA,,uidB'), ['uidA', 'uidB']);
+      expect(PortionCalculator.encodeEaterUids(['a', 'b']), 'a,b');
     });
   });
 }

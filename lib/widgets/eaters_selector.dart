@@ -1,11 +1,11 @@
 // lib/widgets/eaters_selector.dart - VERSION ULTRA-ROBUSTE
 import 'package:flutter/material.dart';
-import '../database.dart';
+import '../models/app_profile.dart';
 
 class EatersSelector extends StatefulWidget {
-  final List<UserProfile> allProfiles;
-  final List<int> selectedProfileIds;
-  final Function(List<int>) onSelectionChanged;
+  final List<GroupMember> allProfiles;
+  final List<String> selectedProfileIds;
+  final Function(List<String>) onSelectionChanged;
 
   const EatersSelector({
     super.key,
@@ -20,7 +20,7 @@ class EatersSelector extends StatefulWidget {
 
 class _EatersSelectorState extends State<EatersSelector> {
   // ✅ État local complètement indépendant
-  final Set<int> _selectedIds = {};
+  final Set<String> _selectedIds = {};
 
   @override
   void initState() {
@@ -39,7 +39,7 @@ class _EatersSelectorState extends State<EatersSelector> {
     }
   }
 
-  void _toggleProfile(int profileId) {
+  void _toggleProfile(String profileId) {
     debugPrint('🎯 Toggle: $profileId, Set actuel: $_selectedIds');
 
     setState(() {
@@ -56,9 +56,18 @@ class _EatersSelectorState extends State<EatersSelector> {
     widget.onSelectionChanged(_selectedIds.toList());
   }
 
+  String _eaterLabel(double m) {
+    final label = m < 0.8
+        ? 'Petit mangeur'
+        : m < 1.2
+            ? 'Mangeur moyen'
+            : 'Gros mangeur';
+    return '$label • x${m.toStringAsFixed(1)}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    debugPrint('🎨 EatersSelector build - Set: $_selectedIds, Profils: ${widget.allProfiles.map((p) => '${p.name}(${p.id})').toList()}');
+    debugPrint('🎨 EatersSelector build - Set: $_selectedIds, Profils: ${widget.allProfiles.map((p) => '${p.name}(${p.uid})').toList()}');
 
     if (widget.allProfiles.isEmpty) {
       return Container(
@@ -73,7 +82,7 @@ class _EatersSelectorState extends State<EatersSelector> {
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Aucun profil disponible. Créez-en un dans les paramètres.',
+                'Aucun membre avec un profil dans ce groupe.',
                 style: TextStyle(color: Colors.grey),
               ),
             ),
@@ -142,7 +151,7 @@ class _EatersSelectorState extends State<EatersSelector> {
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final profile = widget.allProfiles[index];
-              final isSelected = _selectedIds.contains(profile.id);
+              final isSelected = _selectedIds.contains(profile.uid);
 
               return ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -151,7 +160,7 @@ class _EatersSelectorState extends State<EatersSelector> {
                       ? const Color(0xFF10B981)
                       : Colors.grey.shade300,
                   child: Text(
-                    profile.name[0].toUpperCase(),
+                    (profile.name.isEmpty ? '?' : profile.name[0]).toUpperCase(),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: isSelected ? Colors.white : Colors.grey.shade700,
@@ -168,7 +177,7 @@ class _EatersSelectorState extends State<EatersSelector> {
                   ),
                 ),
                 subtitle: Text(
-                  '${profile.age} ans • ${profile.weightKg.toStringAsFixed(0)} kg',
+                  _eaterLabel(profile.eaterMultiplier),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade600,
@@ -176,12 +185,12 @@ class _EatersSelectorState extends State<EatersSelector> {
                 ),
                 trailing: Checkbox(
                   value: isSelected,
-                  onChanged: (_) => _toggleProfile(profile.id),
+                  onChanged: (_) => _toggleProfile(profile.uid),
                   activeColor: const Color(0xFF10B981),
                   // ✅ AJOUTÉ : tristate false pour forcer true/false uniquement
                   tristate: false,
                 ),
-                onTap: () => _toggleProfile(profile.id),
+                onTap: () => _toggleProfile(profile.uid),
               );
             },
           ),

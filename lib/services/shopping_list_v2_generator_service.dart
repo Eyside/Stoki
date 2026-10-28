@@ -134,7 +134,11 @@ class ShoppingListV2GeneratorService {
 
           // Règle de portions : la recette = 1 personne normale (x1).
           // Quantité = somme des coefficients des convives / portions de la recette.
-          final eaters = await eaterResolver.resolve(planning.eaters);
+          final eaters = await eaterResolver.resolve(
+            planning.eaters,
+            ownerId: planning.ownerId,
+            groupId: planning.groupId,
+          );
           final servings = PortionCalculator.mealFactor(
             multipliers: eaters.map((e) => e.multiplier),
             recipeServings: recetteDoc.servings,

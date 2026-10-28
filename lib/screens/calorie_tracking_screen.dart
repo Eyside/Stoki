@@ -1,10 +1,9 @@
 // lib/screens/calorie_tracking_screen.dart - PARTIE 1/3
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../database.dart';
+import '../models/app_profile.dart';
 import '../providers.dart';
-import '../repositories/calorie_tracking_repository.dart';
-import '../repositories/user_profile_repository.dart';
+import '../services/calorie_tracking_firestore_service.dart';
 
 enum ViewMode { day, week, month }
 
@@ -19,29 +18,30 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
   DateTime _selectedDate = DateTime.now();
   ViewMode _viewMode = ViewMode.day;
 
-  late CalorieTrackingRepository _trackingRepo;
-  late UserProfileRepository _profileRepo;
+  late CalorieTrackingFirestoreService _trackingService;
 
-  List<UserProfile> _allProfiles = [];
-  UserProfile? _selectedProfile;
+  AppProfile? _profile;
+  bool _profileLoading = true;
 
   @override
   void initState() {
     super.initState();
-    final db = ref.read(databaseProvider);
-    _trackingRepo = CalorieTrackingRepository(db);
-    _profileRepo = UserProfileRepository(db, groupProfileService: ref.read(groupProfileServiceProvider));
-    _loadProfiles();
+    _trackingService = ref.read(calorieTrackingFirestoreServiceProvider);
+    _loadProfile();
   }
 
-  Future<void> _loadProfiles() async {
-    final profiles = await _profileRepo.getAllProfiles();
-    if (profiles.isNotEmpty && mounted) {
-      setState(() {
-        _allProfiles = profiles;
-        _selectedProfile = profiles.first;
-      });
+  Future<void> _loadProfile() async {
+    AppProfile? profile;
+    try {
+      profile = await ref.read(profileFirestoreServiceProvider).getMyProfile();
+    } catch (e) {
+      debugPrint('Erreur chargement profil: $e');
     }
+    if (!mounted) return;
+    setState(() {
+      _profile = profile;
+      _profileLoading = false;
+    });
   }
 
   void _changeDate(int delta) {
@@ -62,7 +62,14 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_selectedProfile == null) {
+    if (_profileLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Suivi calorique')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_profile == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Suivi calorique')),
         body: _buildEmptyState(),
@@ -73,44 +80,28 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
       appBar: AppBar(
         title: const Text('Suivi calorique'),
         actions: [
-          // Sélecteur de profil
-          PopupMenuButton<UserProfile>(
-            icon: CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.green.shade100,
-              child: Icon(
-                _selectedProfile!.sex == 'male' ? Icons.man : Icons.woman,
-                size: 20,
-                color: Colors.green,
+          // Mon profil
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Tooltip(
+              message: _profile!.name,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () async {
+                  await Navigator.pushNamed(context, '/profiles');
+                  _loadProfile();
+                },
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.green.shade100,
+                  child: Icon(
+                    _profile!.sex == 'male' ? Icons.man : Icons.woman,
+                    size: 20,
+                    color: Colors.green,
+                  ),
+                ),
               ),
             ),
-            tooltip: 'Changer de profil',
-            itemBuilder: (context) => _allProfiles.map((profile) {
-              return PopupMenuItem<UserProfile>(
-                value: profile,
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor: profile.id == _selectedProfile!.id
-                          ? Colors.green.shade100
-                          : Colors.grey.shade200,
-                      child: Icon(
-                        profile.sex == 'male' ? Icons.man : Icons.woman,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(profile.name)),
-                    if (profile.id == _selectedProfile!.id)
-                      const Icon(Icons.check, color: Colors.green, size: 20),
-                  ],
-                ),
-              );
-            }).toList(),
-            onSelected: (profile) {
-              setState(() => _selectedProfile = profile);
-            },
           ),
           // Calendrier
           IconButton(
@@ -151,16 +142,17 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Créez vos profils pour commencer le suivi',
+            'Créez votre profil pour commencer le suivi',
             style: TextStyle(color: Colors.grey),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pushNamed(context, '/profiles');
+            onPressed: () async {
+              await Navigator.pushNamed(context, '/profiles');
+              _loadProfile();
             },
             icon: const Icon(Icons.person_add),
-            label: const Text('Créer un profil'),
+            label: const Text('Créer mon profil'),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
           ),
         ],
@@ -256,9 +248,8 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
 
   // VUE JOUR
   Widget _buildDayView() {
-    return FutureBuilder<List<CalorieTrackingData>>(
-      future: _trackingRepo.getTrackingForDateRange(
-        _selectedProfile!.id,
+    return FutureBuilder<List<CalorieEntry>>(
+      future: _trackingService.getRange(
         DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day),
         DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 23, 59, 59),
       ),
@@ -289,7 +280,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
   }
 
   Widget _buildProgressCircle(Map<String, double> stats) {
-    final targetCalories = _selectedProfile!.tdee ?? 2000;
+    final targetCalories = _profile!.tdee;
     final progress = (stats['calories']! / targetCalories).clamp(0.0, 1.0);
     final remaining = (targetCalories - stats['calories']!).clamp(0.0, double.infinity);
 
@@ -347,7 +338,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
   }
 
   Widget _buildStatsRow(Map<String, double> stats) {
-    final targetCalories = _selectedProfile!.tdee ?? 2000;
+    final targetCalories = _profile!.tdee;
     final remaining = (targetCalories - stats['calories']!).clamp(0.0, double.infinity);
 
     return Row(
@@ -376,7 +367,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
   }
 
   Widget _buildMacrosSection(Map<String, double> stats) {
-    final targetCalories = _selectedProfile!.tdee ?? 2000;
+    final targetCalories = _profile!.tdee;
     final targetProteins = (targetCalories * 0.30) / 4;
     final targetCarbs = (targetCalories * 0.50) / 4;
     final targetFats = (targetCalories * 0.20) / 9;
@@ -420,7 +411,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
 // lib/screens/calorie_tracking_screen.dart - PARTIE 2/3
 // SUITE DE LA PARTIE 1
 
-  Widget _buildMealsSection(List<CalorieTrackingData> trackings) {
+  Widget _buildMealsSection(List<CalorieEntry> trackings) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -459,7 +450,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
     );
   }
 
-  Widget _buildMealCard(CalorieTrackingData tracking) {
+  Widget _buildMealCard(CalorieEntry tracking) {
     final mealInfo = _getMealInfo(tracking.mealType);
 
     return Card(
@@ -496,9 +487,8 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
     final weekStart = _getWeekStart(_selectedDate);
     final weekEnd = weekStart.add(const Duration(days: 6, hours: 23, minutes: 59));
 
-    return FutureBuilder<List<CalorieTrackingData>>(
-      future: _trackingRepo.getTrackingForDateRange(
-        _selectedProfile!.id,
+    return FutureBuilder<List<CalorieEntry>>(
+      future: _trackingService.getRange(
         weekStart,
         weekEnd,
       ),
@@ -510,7 +500,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
         final trackings = snapshot.data ?? [];
         final dailyStats = _groupByDay(trackings, weekStart);
         final weekStats = _calculateWeekStats(trackings);
-        final targetCalories = _selectedProfile!.tdee ?? 2000;
+        final targetCalories = _profile!.tdee;
         final avgCalories = weekStats['calories']! / 7;
 
         return SingleChildScrollView(
@@ -621,9 +611,8 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
     final monthStart = DateTime(_selectedDate.year, _selectedDate.month, 1);
     final monthEnd = DateTime(_selectedDate.year, _selectedDate.month + 1, 0, 23, 59);
 
-    return FutureBuilder<List<CalorieTrackingData>>(
-      future: _trackingRepo.getTrackingForDateRange(
-        _selectedProfile!.id,
+    return FutureBuilder<List<CalorieEntry>>(
+      future: _trackingService.getRange(
         monthStart,
         monthEnd,
       ),
@@ -634,7 +623,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
 
         final trackings = snapshot.data ?? [];
         final monthStats = _calculateMonthStats(trackings);
-        final targetCalories = _selectedProfile!.tdee ?? 2000;
+        final targetCalories = _profile!.tdee;
         final daysInMonth = monthEnd.day;
         final avgCalories = monthStats['calories']! / daysInMonth;
 
@@ -730,7 +719,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
   // HELPERS
   // ============================================================================
 
-  Map<String, double> _calculateDayStats(List<CalorieTrackingData> trackings) {
+  Map<String, double> _calculateDayStats(List<CalorieEntry> trackings) {
     return {
       'calories': trackings.fold(0.0, (sum, t) => sum + t.calories),
       'proteins': trackings.fold(0.0, (sum, t) => sum + t.proteins),
@@ -739,15 +728,15 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
     };
   }
 
-  Map<String, double> _calculateWeekStats(List<CalorieTrackingData> trackings) {
+  Map<String, double> _calculateWeekStats(List<CalorieEntry> trackings) {
     return _calculateDayStats(trackings);
   }
 
-  Map<String, double> _calculateMonthStats(List<CalorieTrackingData> trackings) {
+  Map<String, double> _calculateMonthStats(List<CalorieEntry> trackings) {
     return _calculateDayStats(trackings);
   }
 
-  Map<String, Map<String, double>> _groupByDay(List<CalorieTrackingData> trackings, DateTime weekStart) {
+  Map<String, Map<String, double>> _groupByDay(List<CalorieEntry> trackings, DateTime weekStart) {
     final grouped = <String, Map<String, double>>{};
 
     for (final tracking in trackings) {
@@ -764,7 +753,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
     return grouped;
   }
 
-  int _countDaysWithinTarget(List<CalorieTrackingData> trackings, double target) {
+  int _countDaysWithinTarget(List<CalorieEntry> trackings, double target) {
     final dailyCalories = <String, double>{};
 
     for (final tracking in trackings) {

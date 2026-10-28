@@ -10,18 +10,18 @@
 
 /// Un convive d'un repas, avec son coefficient d'appétit.
 class EaterPortion {
-  /// Identifiant du profil (local pour l'instant). Null si inconnu.
-  final int? profileId;
+  /// Identifiant du compte (uid Firestore). Null si inconnu.
+  final String? uid;
   final String name;
 
   /// 0.5 (petit) / 1.0 (moyen) / 1.5 (gros)
   final double multiplier;
 
-  /// false si le profil n'a pas été retrouvé sur cet appareil.
+  /// false si le profil n'a pas été retrouvé (membre sans profil).
   final bool known;
 
   const EaterPortion({
-    required this.profileId,
+    required this.uid,
     required this.name,
     required this.multiplier,
     this.known = true,
@@ -62,17 +62,18 @@ class PortionCalculator {
     return total;
   }
 
-  /// Lit la liste d'identifiants de convives enregistrée dans le planning.
-  /// Accepte "1,2,3" (format actuel) et "[1,2,3]" (ancien format JSON).
-  static List<int> parseEaterIds(String? eaters) {
+  /// Lit la liste de convives enregistrée dans le planning : des uid de
+  /// comptes séparés par des virgules ("uidA,uidB").
+  static List<String> parseEaterUids(String? eaters) {
     if (eaters == null) return [];
     final cleaned = eaters.replaceAll('[', '').replaceAll(']', '').trim();
     if (cleaned.isEmpty) return [];
-    final ids = <int>[];
-    for (final part in cleaned.split(',')) {
-      final id = int.tryParse(part.trim());
-      if (id != null) ids.add(id);
-    }
-    return ids;
+    return cleaned
+        .split(',')
+        .map((p) => p.trim().replaceAll('"', ''))
+        .where((p) => p.isNotEmpty)
+        .toList();
   }
+
+  static String encodeEaterUids(Iterable<String> uids) => uids.join(',');
 }

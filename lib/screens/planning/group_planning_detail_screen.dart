@@ -3,12 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/date_symbol_data_local.dart'; // ✅ AJOUTÉ
-import '../../database.dart';
 import '../../models/planning_firestore.dart';
 import '../../providers.dart';
-import '../../repositories/planning_repository.dart';
-import '../../repositories/recette_repository.dart';
-import '../../repositories/user_profile_repository.dart';
 import '../../services/planning_firestore_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/recette_firestore_service.dart';
@@ -46,9 +42,8 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
   final _authService = AuthService();
   final _recetteService = RecetteFirestoreService();
 
-  late PlanningRepository _planningRepo;
-  late RecetteRepository _recetteRepo;
-  late UserProfileRepository _profileRepo;
+  /// Repas que j'ai déjà consommés (suivi calorique personnel).
+  Set<String> _myConsumedIds = {};
 
   DateTime _selectedDate = DateTime.now();
   DateTime _focusedDay = DateTime.now();
@@ -64,11 +59,6 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
   @override
   void initState() {
     super.initState();
-    final db = ref.read(databaseProvider);
-    _planningRepo = PlanningRepository(db);
-    _recetteRepo = ref.read(recetteRepositoryProvider);
-    _profileRepo = UserProfileRepository(db);
-
     // ✅ Initialiser la locale française pour table_calendar
     initializeDateFormatting('fr_FR', null);
   }
@@ -286,7 +276,7 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
 
   Widget _buildPlanningList() {
     return FutureBuilder<List<dynamic>>(
-      future: _loadAllPlanningForDate(_selectedDate),
+      future: _loadAllPlanningForDate(_selectedDate).then(_loadMyConsumed),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -426,14 +416,10 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
     );
   }
 
-  Widget _buildLocalMealTile(MealPlanningData planning) {
-    // Cette méthode n'est plus utilisée car on a supprimé le support local
-    return const SizedBox.shrink();
-  }
-
   Widget _buildCloudMealTile(PlanningFirestore planning) {
     final hasModifications = planning.modifiedIngredients != null;
-    final isConsumed = planning.isConsumed;
+    // Repas privé : état du repas. Repas de groupe : chacun son suivi.
+    final isConsumed = planning.isConsumed || _myConsumedIds.contains(planning.id);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -545,7 +531,7 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
             ),
           ],
         ),
-        trailing: isConsumed
+        trailing: planning.isConsumed
             ? null
             : PopupMenuButton<String>( // ✅ AJOUTÉ <String>
           itemBuilder: (context) => <PopupMenuEntry<String>>[ // ✅ AJOUTÉ <PopupMenuEntry<String>>
@@ -571,54 +557,44 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
     );
   }
 
-// 3. Ajoutez cette nouvelle méthode pour consommer un repas:
+  /// Charge la liste des repas que j'ai déjà consommés (pour la pastille).
+  Future<List<dynamic>> _loadMyConsumed(List<dynamic> plannings) async {
+    final tracking = ref.read(calorieTrackingFirestoreServiceProvider);
+    final consumed = <String>{};
+    for (final p in plannings) {
+      if (p is PlanningFirestore && await tracking.hasConsumed(p.id)) {
+        consumed.add(p.id);
+      }
+    }
+    _myConsumedIds = consumed;
+    return plannings;
+  }
 
-  /// Détermine QUI mange ce repas (et avec quel coefficient).
-  /// 1) les convives enregistrés dans le planning ; 2) sinon, l'unique profil ;
-  /// 3) sinon, on demande à l'utilisateur de choisir.
-  Future<List<EaterPortion>?> _resolveEaters(PlanningFirestore planning) async {
-    final resolver = ref.read(eaterResolverProvider);
-    final fromPlanning = await resolver.resolve(planning.eaters);
-    if (fromPlanning.isNotEmpty) return fromPlanning;
-
-    final profiles = await _profileRepo.getAllProfiles();
-    if (profiles.isEmpty) {
+  /// « Consommer » est personnel : seule MA part compte, avec MON coefficient,
+  /// que je sois ou non cochée parmi les convives.
+  Future<List<EaterPortion>?> _resolveMe() async {
+    final profile = await ref.read(profileFirestoreServiceProvider).getMyProfile();
+    if (profile == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Créez d\'abord un profil (onglet Suivi calorique)'),
+          SnackBar(
+            content: const Text('Créez d\'abord votre profil pour suivre vos calories.'),
             backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Créer',
+              textColor: Colors.white,
+              onPressed: () => Navigator.pushNamed(context, '/profiles'),
+            ),
           ),
         );
       }
       return null;
     }
-
-    UserProfile? chosen;
-    if (profiles.length == 1) {
-      chosen = profiles.first;
-    } else {
-      if (!mounted) return null;
-      chosen = await showDialog<UserProfile>(
-        context: context,
-        builder: (c) => SimpleDialog(
-          title: const Text('Qui mange ce repas ?'),
-          children: profiles
-              .map((p) => SimpleDialogOption(
-                    onPressed: () => Navigator.pop(c, p),
-                    child: Text(p.name),
-                  ))
-              .toList(),
-        ),
-      );
-    }
-    if (chosen == null) return null;
-
     return [
       EaterPortion(
-        profileId: chosen.id,
-        name: chosen.name,
-        multiplier: chosen.eaterMultiplier,
+        uid: profile.uid,
+        name: profile.name,
+        multiplier: profile.eaterMultiplier,
       ),
     ];
   }
@@ -659,9 +635,13 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
     List<EaterPortion>? eaters;
     if (action == MealAction.cook) {
       // Pour le stock, pas besoin de choisir un profil : sans convive, on compte 1 personne.
-      eaters = await ref.read(eaterResolverProvider).resolve(planning.eaters);
+      eaters = await ref.read(eaterResolverProvider).resolve(
+        planning.eaters,
+        ownerId: planning.ownerId,
+        groupId: planning.groupId,
+      );
     } else {
-      eaters = await _resolveEaters(planning);
+      eaters = await _resolveMe();
     }
     if (eaters == null || !mounted) return;
     final resolvedEaters = eaters;
@@ -959,40 +939,9 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
     }
   }
 
-  Future<void> _showLocalMealDetails(MealPlanningData planning, Recette? recette) async {
-    if (recette == null) return;
-
-    final nutrition = await _recetteRepo.calculateNutritionForRecette(recette.id);
-    final portionFactor = planning.servings / recette.servings;
-
-    final adjustedNutrition = nutrition.map((key, value) =>
-        MapEntry(key, value * portionFactor)
-    );
-
-    final db = ref.read(databaseProvider);
-    final ingredients = await (db.select(db.recetteIngredients)
-      ..where((ri) => ri.recetteId.equals(recette.id)))
-        .get();
-
-    final profile = await _profileRepo.getActiveProfile();
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (c) => PlanningDetailDialog(
-        recetteName: recette.name,
-        servings: planning.servings,
-        nutrition: adjustedNutrition,
-        ingredients: ingredients,
-        userProfile: profile,
-      ),
-    );
-  }
-
   Future<void> _showCloudMealDetails(PlanningFirestore planning) async {
     final ingredients = await _recetteService.getIngredients(planning.recetteId);
-    final profile = await _profileRepo.getActiveProfile();
+    final profile = await ref.read(profileFirestoreServiceProvider).getMyProfile();
 
     final nutrition = {
       'calories': planning.totalCalories,
@@ -1014,31 +963,6 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
         userProfile: profile,
       ),
     );
-  }
-
-  Future<void> _deleteLocalMeal(MealPlanningData planning) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Supprimer ce repas ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(c, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await _planningRepo.deletePlanning(planning.id);
-      setState(() {});
-    }
   }
 
   Future<void> _deleteCloudMeal(PlanningFirestore planning) async {

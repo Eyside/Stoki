@@ -1,16 +1,17 @@
 // lib/widgets/group_profiles_list.dart
 import 'package:flutter/material.dart';
-import '../services/group_profile_service.dart';
+import '../models/app_profile.dart';
+import '../services/profile_firestore_service.dart';
 
 /// Widget pour afficher la liste des profils configurés dans un groupe
 class GroupProfilesList extends StatelessWidget {
   final String groupId;
-  final GroupProfileService groupProfileService;
+  final ProfileFirestoreService profileService;
 
   const GroupProfilesList({
     super.key,
     required this.groupId,
-    required this.groupProfileService,
+    required this.profileService,
   });
 
   @override
@@ -33,8 +34,8 @@ class GroupProfilesList extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            StreamBuilder<List<Map<String, dynamic>>>(
-              stream: groupProfileService.watchGroupProfiles(groupId),
+            StreamBuilder<List<GroupMember>>(
+              stream: profileService.watchGroupMembers(groupId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
@@ -65,12 +66,12 @@ class GroupProfilesList extends StatelessWidget {
                         Icon(Icons.person_off, size: 48, color: Colors.grey.shade400),
                         const SizedBox(height: 8),
                         Text(
-                          'Aucun profil configuré',
+                          'Aucun profil dans ce groupe',
                           style: TextStyle(color: Colors.grey.shade600),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Les membres doivent configurer leurs profils',
+                          'Chaque membre doit créer son profil (onglet Suivi calorique)',
                           style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                         ),
                       ],
@@ -89,11 +90,9 @@ class GroupProfilesList extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileTile(Map<String, dynamic> profile) {
-    final name = profile['name'] ?? 'Inconnu';
-    final eaterMultiplier = profile['eaterMultiplier'] ?? 1.0;
-    final sex = profile['sex'] ?? 'other';
-    final age = profile['age'] ?? 0;
+  Widget _buildProfileTile(GroupMember profile) {
+    final name = profile.name;
+    final eaterMultiplier = profile.eaterMultiplier;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -110,7 +109,7 @@ class GroupProfilesList extends StatelessWidget {
             radius: 20,
             backgroundColor: _getEaterColor(eaterMultiplier).withValues(alpha: 0.2),
             child: Icon(
-              _getSexIcon(sex),
+              Icons.person,
               color: _getEaterColor(eaterMultiplier),
               size: 20,
             ),
@@ -130,7 +129,7 @@ class GroupProfilesList extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '$age ans • ${_getEaterLabel(eaterMultiplier)}',
+                  _getEaterLabel(eaterMultiplier),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade600,
@@ -159,17 +158,6 @@ class GroupProfilesList extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  IconData _getSexIcon(String sex) {
-    switch (sex) {
-      case 'male':
-        return Icons.man;
-      case 'female':
-        return Icons.woman;
-      default:
-        return Icons.person;
-    }
   }
 
   Color _getEaterColor(double multiplier) {

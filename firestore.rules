@@ -50,6 +50,16 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if signedIn();
       allow write: if isUser(userId);
+
+      // Mon profil complet (âge, poids, taille...) : visible par moi seul
+      match /private/{docId} {
+        allow read, write: if isUser(userId);
+      }
+
+      // Mon suivi calorique : visible par moi seul
+      match /calorie_tracking/{entryId} {
+        allow read, write: if isUser(userId);
+      }
     }
 
     // ------------------------------------------------------------------------
@@ -91,12 +101,14 @@ service cloud.firestore {
         allow delete: if isUser(memberId) || isGroupAdmin(groupId);
       }
 
-      // ----- Profils (données de santé : taille, poids, âge...) -----
+      // ----- Profils de groupe : nom + coefficient de mangeur uniquement -----
+      // Un document par membre, dont l'identifiant est son uid.
       // Visibles uniquement par les membres du groupe.
       match /profiles/{profileId} {
         allow read: if isMember(groupId);
 
         allow create: if isMember(groupId) &&
+          profileId == request.auth.uid &&
           request.resource.data.userId == request.auth.uid;
 
         allow update: if isMember(groupId) &&

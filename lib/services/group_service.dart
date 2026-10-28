@@ -1,9 +1,21 @@
 // lib/services/group_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
+import 'profile_firestore_service.dart';
 
 class GroupService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  /// Ajoute mon profil (nom + coefficient) au groupe. Sans effet si je n'ai pas
+  /// encore de profil, et sans jamais faire échouer la création / l'arrivée.
+  Future<void> _addMyProfileToGroup(String groupId) async {
+    try {
+      await ProfileFirestoreService().syncToGroup(groupId);
+    } catch (e) {
+      debugPrint('⚠️ Ajout du profil au groupe impossible: $e');
+    }
+  }
 
   // Créer un groupe
   Future<String?> createGroup({
@@ -34,6 +46,8 @@ class GroupService {
       });
 
       print('✅ Membre admin ajouté: $userId');
+
+      await _addMyProfileToGroup(docRef.id);
 
       return docRef.id;
     } catch (e) {
@@ -82,6 +96,8 @@ class GroupService {
       await groupDoc.reference.update({
         'memberCount': FieldValue.increment(1),
       });
+
+      await _addMyProfileToGroup(groupDoc.id);
 
       return true;
     } catch (e) {

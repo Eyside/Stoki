@@ -1,7 +1,7 @@
 // lib/services/meal_consumption_service.dart
 // Deux actions distinctes sur un repas planifié :
 //   • CUISINER   = déduire les ingrédients du stock
-//   • CONSOMMER  = ajouter les calories au suivi calorique de chaque convive
+//   • CONSOMMER  = ajouter MA part de calories à MON suivi calorique
 //
 // Règle de portions (voir PortionCalculator) : la recette représente une
 // personne normale (x1) ; chaque convive reçoit la recette multipliée par son
@@ -11,7 +11,7 @@ import 'package:flutter/foundation.dart';
 import '../models/frigo_firestore.dart';
 import '../models/planning_firestore.dart';
 import '../models/recette_firestore.dart';
-import '../repositories/calorie_tracking_repository.dart';
+import 'calorie_tracking_firestore_service.dart';
 import '../utils/portion_calculator.dart';
 import '../utils/unit_converter.dart';
 import 'planning_firestore_service.dart';
@@ -52,7 +52,7 @@ class MealConsumptionService {
   final PlanningFirestoreService _planningService;
   final RecetteFirestoreService _recetteService;
   final FrigoFirestoreService _frigoService;
-  final CalorieTrackingRepository _calorieTrackingRepo;
+  final CalorieTrackingFirestoreService _calorieTrackingService;
 
   /// Tolérance (en grammes) pour éviter les erreurs d'arrondi.
   static const double _epsilonGrams = 0.001;
@@ -61,11 +61,11 @@ class MealConsumptionService {
     required PlanningFirestoreService planningService,
     required RecetteFirestoreService recetteService,
     required FrigoFirestoreService frigoService,
-    required CalorieTrackingRepository calorieTrackingRepo,
+    required CalorieTrackingFirestoreService calorieTrackingService,
   })  : _planningService = planningService,
         _recetteService = recetteService,
         _frigoService = frigoService,
-        _calorieTrackingRepo = calorieTrackingRepo;
+        _calorieTrackingService = calorieTrackingService;
 
   // ==========================================================================
   // OUTILS
@@ -201,7 +201,7 @@ class MealConsumptionService {
       final unknownCount = eaters.where((e) => !e.known).length;
       if (unknownCount > 0) {
         infos.add(
-          'ℹ️ $unknownCount convive(s) introuvable(s) sur cet appareil : comptés comme une personne normale.',
+          'ℹ️ $unknownCount convive(s) sans profil : comptés comme une personne normale.',
         );
       }
 
@@ -322,71 +322,65 @@ class MealConsumptionService {
     };
   }
 
-  /// Ajoute au suivi calorique de chaque convive sa part du repas.
+  /// Ajoute MA part du repas à MON suivi calorique. [eaters] contient ma
+  /// ligne (coefficient de mon profil) ; chacun consomme pour soi seul.
   Future<MealConsumptionResult> consumeMeal({
     required PlanningFirestore planning,
     required List<EaterPortion> eaters,
   }) async {
-    if (planning.isConsumed) {
+    final myUid = _calorieTrackingService.currentUid;
+    if (myUid == null) {
       return MealConsumptionResult(
         success: false,
-        message: 'ℹ️ Ce repas est déjà marqué comme consommé.',
+        message: '❌ Vous devez être connecté pour suivre vos calories.',
       );
     }
 
-    final warnings = <String>[];
-
     try {
-      debugPrint('🍽️ Consommation du repas: ${planning.recetteName}');
-
-      // Seuls les profils retrouvés sur cet appareil peuvent recevoir des calories
-      final trackable = eaters.where((e) => e.known && e.profileId != null).toList();
-      if (trackable.isEmpty) {
+      if (await _calorieTrackingService.hasConsumed(planning.id)) {
         return MealConsumptionResult(
           success: false,
-          message: '❌ Aucun profil à qui attribuer les calories. Créez un profil d\'abord.',
+          message: 'ℹ️ Vous avez déjà consommé ce repas.',
         );
       }
-      final unknownCount = eaters.length - trackable.length;
-      if (unknownCount > 0) {
-        warnings.add(
-          'ℹ️ $unknownCount convive(s) introuvable(s) sur cet appareil : '
-              'leurs calories ne sont pas enregistrées.',
+
+      final me = eaters.where((e) => e.uid == myUid).isNotEmpty
+          ? eaters.firstWhere((e) => e.uid == myUid)
+          : (eaters.isNotEmpty ? eaters.first : null);
+      if (me == null) {
+        return MealConsumptionResult(
+          success: false,
+          message: '❌ Créez votre profil pour calculer vos calories.',
         );
       }
 
       final recipeServings = await getRecipeServings(planning.recetteId);
-      final baseCalories = planning.modifiedCalories ?? planning.totalCalories;
-      final baseProteins = planning.modifiedProteins ?? planning.totalProteins;
-      final baseFats = planning.modifiedFats ?? planning.totalFats;
-      final baseCarbs = planning.modifiedCarbs ?? planning.totalCarbs;
-      final baseFibers = planning.modifiedFibers ?? planning.totalFibers;
+      final factor = PortionCalculator.eaterFactor(
+        multiplier: me.multiplier,
+        recipeServings: recipeServings,
+      );
 
-      final perEaterLines = <String>[];
-      for (final eater in trackable) {
-        final factor = PortionCalculator.eaterFactor(
-          multiplier: eater.multiplier,
-          recipeServings: recipeServings,
-        );
-        await _calorieTrackingRepo.addTracking(
-          userProfileId: eater.profileId!,
-          date: planning.date,
-          mealType: planning.mealType,
-          calories: baseCalories * factor,
-          proteins: baseProteins * factor,
-          fats: baseFats * factor,
-          carbs: baseCarbs * factor,
-          fibers: baseFibers * factor,
-        );
-        perEaterLines.add('${eater.name} : ${(baseCalories * factor).round()} kcal');
+      final calories = (planning.modifiedCalories ?? planning.totalCalories) * factor;
+      await _calorieTrackingService.addEntry(
+        planningId: planning.id,
+        date: planning.date,
+        mealType: planning.mealType,
+        calories: calories,
+        proteins: (planning.modifiedProteins ?? planning.totalProteins) * factor,
+        fats: (planning.modifiedFats ?? planning.totalFats) * factor,
+        carbs: (planning.modifiedCarbs ?? planning.totalCarbs) * factor,
+        fibers: (planning.modifiedFibers ?? planning.totalFibers) * factor,
+        recipeName: planning.recetteName,
+      );
+
+      // Repas privé : une seule personne, on peut marquer le repas lui-même.
+      if (planning.visibility == PlanningVisibility.private) {
+        await _planningService.markConsumed(planning.id);
       }
-
-      await _planningService.markConsumed(planning.id);
 
       return MealConsumptionResult(
         success: true,
-        message: '🍽️ Repas consommé ! ${perEaterLines.join(' • ')}',
-        warnings: warnings,
+        message: '🍽️ Repas consommé ! ${calories.round()} kcal ajoutées à votre suivi.',
       );
     } catch (e, stackTrace) {
       debugPrint('❌ Erreur lors de la consommation du repas: $e');
@@ -394,7 +388,6 @@ class MealConsumptionService {
       return MealConsumptionResult(
         success: false,
         message: '❌ Erreur: $e',
-        warnings: warnings,
       );
     }
   }

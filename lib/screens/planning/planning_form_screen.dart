@@ -1,15 +1,15 @@
 // lib/screens/planning/planning_form_screen.dart - VERSION COMPLÈTE CORRIGÉE
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../database.dart';
+import '../../models/app_profile.dart';
 import '../../models/planning_firestore.dart';
 import '../../models/recette_firestore.dart';
 import '../../providers.dart';
-import '../../repositories/user_profile_repository.dart';
 import '../../services/planning_firestore_service.dart';
 import '../../services/recette_firestore_service.dart';
 import '../../services/auth_service.dart';
-import '../../services/group_profile_service.dart';
+import '../../services/profile_firestore_service.dart';
+import '../../utils/portion_calculator.dart';
 import '../../widgets/eaters_selector.dart';
 import 'group_planning_detail_screen.dart';
 
@@ -41,18 +41,16 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
   final _planningService = PlanningFirestoreService();
   final _recetteService = RecetteFirestoreService();
   final _authService = AuthService();
-  final _groupProfileService = GroupProfileService();
-
-  late UserProfileRepository _profileRepo;
+  final _profileService = ProfileFirestoreService();
 
   // Formulaire
   RecipeSourceType _recipeSource = RecipeSourceType.private;
   dynamic _selectedRecipe;
   String _selectedMealType = 'lunch';
-  final List<int> _selectedEaters = []; // ✅ final pour éviter réassignation
+  final List<String> _selectedEaters = []; // uid des convives (groupe uniquement)
 
   List<dynamic> _availableRecipes = [];
-  List<UserProfile> _availableProfiles = [];
+  List<GroupMember> _availableProfiles = [];
   bool _isLoading = false;
 
   final _mealTypes = [
@@ -65,9 +63,6 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
   @override
   void initState() {
     super.initState();
-    final db = ref.read(databaseProvider);
-    _profileRepo = UserProfileRepository(db);
-
     // Définir la source par défaut selon le contexte
     if (widget.sourceType == PlanningSourceType.group) {
       _recipeSource = RecipeSourceType.group;
@@ -104,15 +99,24 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
     }
   }
 
+  /// Planning de groupe : les convives se choisissent parmi les membres du
+  /// groupe (moi coché par défaut). Planning privé : une seule personne, moi.
   Future<void> _loadProfiles() async {
     if (widget.sourceType == PlanningSourceType.group && widget.groupId != null) {
-      final groupProfilesData = await _groupProfileService.getGroupProfiles(widget.groupId!);
-      setState(() {
-        _availableProfiles = _groupProfileService.convertToUserProfiles(groupProfilesData);
-      });
+      try {
+        final members = await _profileService.getGroupMembers(widget.groupId!);
+        final myUid = _profileService.currentUid;
+        setState(() {
+          _availableProfiles = members;
+          if (_selectedEaters.isEmpty && myUid != null && members.any((m) => m.uid == myUid)) {
+            _selectedEaters.add(myUid);
+          }
+        });
+      } catch (e) {
+        debugPrint('Erreur chargement membres du groupe: $e');
+      }
     } else {
-      final profiles = await _profileRepo.getAllProfiles();
-      setState(() => _availableProfiles = profiles);
+      setState(() => _availableProfiles = []);
     }
   }
 
@@ -411,7 +415,6 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
           allProfiles: _availableProfiles,
           selectedProfileIds: _selectedEaters,
           onSelectionChanged: (ids) {
-            // ✅ Mise à jour sans setState
             _selectedEaters.clear();
             _selectedEaters.addAll(ids);
           },
@@ -464,8 +467,10 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
         mealTime.minute,
       );
 
-      final eatersJson = _selectedEaters.isNotEmpty
-          ? EatersHelper.encodeEaters(_selectedEaters)
+      // Privé : pas de convives (= moi). Groupe : les membres cochés.
+      final eatersJson = (widget.sourceType == PlanningSourceType.group &&
+              _selectedEaters.isNotEmpty)
+          ? PortionCalculator.encodeEaterUids(_selectedEaters)
           : null;
 
       // Toujours une recette cloud (RecetteFirestore)
@@ -536,17 +541,5 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
       'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
     ];
     return '${weekdays[date.weekday - 1]} ${date.day} ${months[date.month - 1]} ${date.year}';
-  }
-}
-
-// Helper pour encoder/décoder les convives
-class EatersHelper {
-  static String encodeEaters(List<int> profileIds) {
-    return profileIds.join(',');
-  }
-
-  static List<int> decodeEaters(String eatersJson) {
-    if (eatersJson.isEmpty) return [];
-    return eatersJson.split(',').map((s) => int.parse(s)).toList();
   }
 }
