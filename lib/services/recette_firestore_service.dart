@@ -336,6 +336,43 @@ class RecetteFirestoreService {
   }
 
   // ============================================================================
+  // COPIER UNE DE MES RECETTES DANS UNE BANQUE DE GROUPE
+  // ============================================================================
+
+  /// Crée dans le groupe une copie de [sourceRecetteId] (même nom, mêmes
+  /// ingrédients). Ma recette d'origine n'est pas modifiée.
+  Future<String> copyToGroup({
+    required String sourceRecetteId,
+    required String groupId,
+    String? groupName,
+  }) async {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) throw 'Non connecté';
+
+    final sourceDoc = await _firestore.collection('recettes').doc(sourceRecetteId).get();
+    if (!sourceDoc.exists) throw 'Recette introuvable';
+    final source = RecetteFirestore.fromFirestore(sourceDoc);
+
+    final newId = await createRecette(
+      name: source.name,
+      instructions: source.instructions,
+      servings: source.servings,
+      category: source.category,
+      notes: source.notes,
+      imageUrl: source.imageUrl,
+      visibility: RecetteVisibility.group,
+      groupId: groupId,
+      groupName: groupName,
+    );
+
+    final ingredients = await getIngredients(sourceRecetteId);
+    for (final ingredient in ingredients) {
+      await addIngredient(recetteId: newId, ingredient: ingredient);
+    }
+    return newId;
+  }
+
+  // ============================================================================
   // RÉCUPÉRER UNE RECETTE PAR ID
   // ============================================================================
 

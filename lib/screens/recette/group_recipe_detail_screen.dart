@@ -76,6 +76,13 @@ class _GroupRecipeDetailScreenState extends ConsumerState<GroupRecipeDetailScree
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF1E293B),
         actions: [
+          // Piocher dans mes recettes (banque de groupe uniquement)
+          if (widget.recipeType == RecipeType.group && widget.groupId != null)
+            IconButton(
+              icon: const Icon(Icons.library_add),
+              tooltip: 'Ajouter depuis mes recettes',
+              onPressed: _pickFromMyRecipes,
+            ),
           // Filtre par catégorie
           PopupMenuButton<String?>(
             icon: Icon(
@@ -459,6 +466,17 @@ class _GroupRecipeDetailScreenState extends ConsumerState<GroupRecipeDetailScree
                 color: Color(0xFF94A3B8),
               ),
             ),
+            if (_searchQuery.isEmpty &&
+                _selectedCategory == null &&
+                widget.recipeType == RecipeType.group &&
+                widget.groupId != null) ...[
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: _pickFromMyRecipes,
+                icon: const Icon(Icons.library_add),
+                label: const Text('Ajouter depuis mes recettes'),
+              ),
+            ],
             if (_searchQuery.isEmpty && _selectedCategory == null) ...[
               const SizedBox(height: 24),
               ElevatedButton.icon(
@@ -610,6 +628,141 @@ class _GroupRecipeDetailScreenState extends ConsumerState<GroupRecipeDetailScree
         ),
       ),
     );
+  }
+
+  /// Choisit dans MES recettes privées celles à copier dans ce groupe.
+  Future<void> _pickFromMyRecipes() async {
+    final groupId = widget.groupId;
+    if (groupId == null) return;
+
+    List<RecetteFirestore> mine;
+    List<RecetteFirestore> inGroup;
+    try {
+      mine = (await _recetteService.getMyRecettes().first)
+          .where((r) => r.visibility == RecetteVisibility.private)
+          .toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      inGroup = await _recetteService.getGroupRecettes(groupId).first;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e'), backgroundColor: const Color(0xFFEF4444)),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final namesInGroup = inGroup.map((r) => r.name.trim().toLowerCase()).toSet();
+
+    final chosen = await showModalBottomSheet<List<RecetteFirestore>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final selected = <String>{};
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Ajouter depuis mes recettes',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (mine.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text('Vous n\'avez aucune recette privée à ajouter.'),
+                      )
+                    else
+                      Flexible(
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: mine.map((r) {
+                            final already =
+                                namesInGroup.contains(r.name.trim().toLowerCase());
+                            return CheckboxListTile(
+                              value: selected.contains(r.id),
+                              onChanged: already
+                                  ? null
+                                  : (v) => setSheetState(() {
+                                        if (v == true) {
+                                          selected.add(r.id);
+                                        } else {
+                                          selected.remove(r.id);
+                                        }
+                                      }),
+                              title: Text(r.name),
+                              subtitle: Text(already
+                                  ? 'Déjà dans ce groupe'
+                                  : '${r.servings} portion(s)'),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: selected.isEmpty
+                              ? null
+                              : () => Navigator.pop(
+                                    sheetContext,
+                                    mine.where((r) => selected.contains(r.id)).toList(),
+                                  ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: Text(selected.isEmpty
+                              ? 'Sélectionnez des recettes'
+                              : 'Ajouter ${selected.length} recette(s) au groupe'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (chosen == null || chosen.isEmpty || !mounted) return;
+
+    try {
+      for (final r in chosen) {
+        await _recetteService.copyToGroup(
+          sourceRecetteId: r.id,
+          groupId: groupId,
+          groupName: widget.title,
+        );
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${chosen.length} recette(s) ajoutée(s) au groupe'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: const Color(0xFFEF4444)),
+        );
+      }
+    }
   }
 
   Future<void> _duplicateRecipe(RecetteFirestore recipe) async {

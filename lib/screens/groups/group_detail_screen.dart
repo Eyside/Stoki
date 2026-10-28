@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/group_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_firestore_service.dart';
-import '../../widgets/group_profiles_list.dart';
+import '../../models/app_profile.dart';
 
 class GroupDetailScreen extends ConsumerStatefulWidget {
   final String groupId;
@@ -95,14 +95,6 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
             children: [
               // Informations du groupe
               _buildGroupInfoCard(),
-              const SizedBox(height: 16),
-
-              // Profils des membres (nom + coefficient)
-              GroupProfilesList(
-                groupId: widget.groupId,
-                profileService: _profileService,
-              ),
-
               const SizedBox(height: 16),
 
               // Code d'invitation
@@ -201,6 +193,17 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
     );
   }
 
+  String _eaterLabel(double m) {
+    final label = m < 0.8
+        ? 'Petit mangeur'
+        : m < 1.2
+            ? 'Mangeur moyen'
+            : 'Gros mangeur';
+    return '$label • x${m.toStringAsFixed(1)}';
+  }
+
+  /// Une seule liste : chaque membre est un compte, avec son profil
+  /// (prénom + coefficient) quand il l'a créé.
   Widget _buildMembersList() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,62 +213,84 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        StreamBuilder<List<Map<String, dynamic>>>(
-          stream: _groupService.getGroupMembers(widget.groupId),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        StreamBuilder<List<GroupMember>>(
+          stream: _profileService.watchGroupMembers(widget.groupId),
+          builder: (context, profileSnapshot) {
+            final profiles = {
+              for (final p in profileSnapshot.data ?? <GroupMember>[]) p.uid: p
+            };
 
-            final members = snapshot.data!;
+            return StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _groupService.getGroupMembers(widget.groupId),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-            return Column(
-              children: members.map((member) {
-                final isCurrentUser = member['userId'] == _authService.currentUser?.uid;
+                final members = snapshot.data!;
 
-                return Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.grey.shade200,
-                      child: Text(
-                        member['displayName']?.toString().substring(0, 1).toUpperCase() ?? '?',
+                return Column(
+                  children: members.map((member) {
+                    final uid = member['userId'] as String?;
+                    final isCurrentUser = uid == _authService.currentUser?.uid;
+                    final profile = uid != null ? profiles[uid] : null;
+                    final title = profile?.name ??
+                        (member['displayName'] ?? 'Utilisateur').toString();
+
+                    return Card(
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: profile != null
+                              ? Colors.green.shade100
+                              : Colors.grey.shade200,
+                          child: Text(
+                            title.isEmpty ? '?' : title.substring(0, 1).toUpperCase(),
+                          ),
+                        ),
+                        title: Text(title),
+                        subtitle: Text(
+                          profile != null
+                              ? _eaterLabel(profile.eaterMultiplier)
+                              : 'Profil non créé',
+                          style: TextStyle(
+                            color: profile != null ? null : Colors.orange.shade800,
+                          ),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (member['role'] == 'admin')
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'Admin',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            if (isCurrentUser)
+                              Container(
+                                margin: const EdgeInsets.only(left: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'Vous',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                    title: Text(member['displayName'] ?? 'Utilisateur'),
-                    subtitle: Text(member['email'] ?? ''),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (member['role'] == 'admin')
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'Admin',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        if (isCurrentUser)
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'Vous',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
+                    );
+                  }).toList(),
                 );
-              }).toList(),
+              },
             );
           },
         ),

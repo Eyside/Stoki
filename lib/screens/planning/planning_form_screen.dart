@@ -8,14 +8,21 @@ import '../../providers.dart';
 import '../../services/planning_firestore_service.dart';
 import '../../services/recette_firestore_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/group_service.dart';
 import '../../services/profile_firestore_service.dart';
 import '../../utils/portion_calculator.dart';
 import '../../widgets/eaters_selector.dart';
 import 'group_planning_detail_screen.dart';
 
-enum RecipeSourceType {
-  private,
-  group,
+/// Une banque de recettes : « mes recettes » ou les recettes d'un groupe.
+class _RecipeBank {
+  static const mineId = 'mine';
+
+  final String id; // 'mine' ou l'identifiant du groupe
+  final String label;
+  const _RecipeBank(this.id, this.label);
+
+  bool get isMine => id == mineId;
 }
 
 class PlanningFormScreen extends ConsumerStatefulWidget {
@@ -44,7 +51,10 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
   final _profileService = ProfileFirestoreService();
 
   // Formulaire
-  RecipeSourceType _recipeSource = RecipeSourceType.private;
+  // Banques de recettes disponibles et banques cochées
+  final List<_RecipeBank> _banks = [const _RecipeBank(_RecipeBank.mineId, 'Mes recettes')];
+  final Set<String> _enabledBanks = {_RecipeBank.mineId};
+  final Map<String, String> _recipeBankOf = {}; // recetteId -> libellé de banque
   dynamic _selectedRecipe;
   String _selectedMealType = 'lunch';
   final List<String> _selectedEaters = []; // uid des convives (groupe uniquement)
@@ -63,40 +73,81 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
   @override
   void initState() {
     super.initState();
-    // Définir la source par défaut selon le contexte
-    if (widget.sourceType == PlanningSourceType.group) {
-      _recipeSource = RecipeSourceType.group;
+    // Planning de groupe : la banque du groupe est cochée d'office.
+    if (widget.sourceType == PlanningSourceType.group && widget.groupId != null) {
+      _enabledBanks.add(widget.groupId!);
     }
-
     _loadData();
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
-    // Charger les recettes
+    await _loadBanks();
     await _loadRecipes();
-
-    // Charger les profils
     await _loadProfiles();
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
+  /// Mes groupes = autant de banques de recettes supplémentaires.
+  Future<void> _loadBanks() async {
+    final uid = _authService.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final groups = await GroupService().getUserGroups(uid).first;
+      for (final g in groups) {
+        final id = g['id'] as String;
+        if (_banks.any((b) => b.id == id)) continue;
+        _banks.add(_RecipeBank(id, (g['name'] ?? 'Groupe') as String));
+      }
+      // Le groupe du planning doit toujours être proposé.
+      final gid = widget.groupId;
+      if (gid != null && !_banks.any((b) => b.id == gid)) {
+        _banks.add(_RecipeBank(gid, widget.groupName ?? 'Groupe'));
+      }
+    } catch (e) {
+      debugPrint('Erreur chargement des groupes: $e');
+    }
+  }
+
+  /// Recettes de toutes les banques cochées (sans doublon).
   Future<void> _loadRecipes() async {
-    if (_recipeSource == RecipeSourceType.private) {
-      // Charger mes recettes privées
-      final recipes = await _recetteService.getMyRecettes().first;
-      setState(() => _availableRecipes = recipes.where((r) =>
-      r.visibility == RecetteVisibility.private
-      ).toList());
-    } else {
-      // Charger les recettes du groupe
-      if (widget.sourceType == PlanningSourceType.group && widget.groupId != null) {
-        final recipes = await _recetteService.getGroupRecettes(widget.groupId!).first;
-        setState(() => _availableRecipes = recipes);
+    final result = <String, RecetteFirestore>{};
+    final bankOf = <String, String>{};
+
+    for (final bank in _banks.where((b) => _enabledBanks.contains(b.id))) {
+      try {
+        final recipes = bank.isMine
+            ? (await _recetteService.getMyRecettes().first)
+                .where((r) => r.visibility == RecetteVisibility.private)
+                .toList()
+            : await _recetteService.getGroupRecettes(bank.id).first;
+        for (final r in recipes) {
+          result.putIfAbsent(r.id, () => r);
+          bankOf.putIfAbsent(r.id, () => bank.label);
+        }
+      } catch (e) {
+        debugPrint('Erreur chargement recettes (${bank.label}): $e');
       }
     }
+
+    final list = result.values.toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    if (!mounted) return;
+    setState(() {
+      _availableRecipes = list;
+      _recipeBankOf
+        ..clear()
+        ..addAll(bankOf);
+      // La recette choisie n'est plus proposée : on la désélectionne.
+      if (_selectedRecipe != null) {
+        // Même recette = nouvelle instance après rechargement (le menu
+        // déroulant compare par identité).
+        _selectedRecipe = result[(_selectedRecipe as RecetteFirestore).id];
+      }
+    });
   }
 
   /// Planning de groupe : les convives se choisissent parmi les membres du
@@ -142,11 +193,9 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
             _buildDateCard(),
             const SizedBox(height: 20),
 
-            // Source de recette (seulement si "Tout")
-            if (widget.sourceType == PlanningSourceType.all) ...[
-              _buildSourceSelector(),
-              const SizedBox(height: 20),
-            ],
+            // Banques de recettes à inclure
+            _buildSourceSelector(),
+            const SizedBox(height: 20),
 
             // Sélection de recette
             _buildRecipeSelector(),
@@ -222,85 +271,46 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Source de recette',
+          'Banques de recettes',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
             color: Color(0xFF1E293B),
           ),
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildSourceOption(
-                RecipeSourceType.private,
-                'Mes recettes privées',
-                Icons.lock_person,
-                Colors.blue,
+        const SizedBox(height: 4),
+        const Text(
+          'Cochez celles dans lesquelles piocher',
+          style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: _banks.map((bank) {
+            final selected = _enabledBanks.contains(bank.id);
+            return FilterChip(
+              avatar: Icon(
+                bank.isMine ? Icons.lock_person : Icons.group,
+                size: 18,
+                color: bank.isMine ? Colors.blue : Colors.green,
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildSourceOption(
-                RecipeSourceType.group,
-                'Recettes de groupe',
-                Icons.group,
-                Colors.green,
-              ),
-            ),
-          ],
+              label: Text(bank.label),
+              selected: selected,
+              onSelected: (value) {
+                setState(() {
+                  if (value) {
+                    _enabledBanks.add(bank.id);
+                  } else if (_enabledBanks.length > 1) {
+                    _enabledBanks.remove(bank.id); // au moins une banque
+                  }
+                });
+                _loadRecipes();
+              },
+            );
+          }).toList(),
         ),
       ],
-    );
-  }
-
-  Widget _buildSourceOption(
-      RecipeSourceType type,
-      String label,
-      IconData icon,
-      Color color,
-      ) {
-    final isSelected = _recipeSource == type;
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _recipeSource = type;
-          _selectedRecipe = null;
-        });
-        _loadRecipes();
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? color : const Color(0xFFE2E8F0),
-            width: 2,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              size: 32,
-              color: isSelected ? color : const Color(0xFF94A3B8),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? color : const Color(0xFF64748B),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -330,23 +340,22 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
-            prefixIcon: Icon(
-              _recipeSource == RecipeSourceType.private
-                  ? Icons.lock_person
-                  : Icons.group,
-              color: _recipeSource == RecipeSourceType.private
-                  ? Colors.blue
-                  : Colors.green,
-            ),
+            prefixIcon: const Icon(Icons.menu_book, color: Color(0xFF10B981)),
           ),
+          isExpanded: true,
           hint: Text(_availableRecipes.isEmpty
               ? 'Aucune recette disponible'
               : 'Sélectionnez une recette'),
           items: _availableRecipes.map((recipe) {
-            final name = (recipe as RecetteFirestore).name;
+            final r = recipe as RecetteFirestore;
+            final bank = _recipeBankOf[r.id];
+            // On précise la banque quand plusieurs sont cochées
+            final label = (_enabledBanks.length > 1 && bank != null)
+                ? '${r.name}  ·  $bank'
+                : r.name;
             return DropdownMenuItem(
               value: recipe,
-              child: Text(name, overflow: TextOverflow.ellipsis),
+              child: Text(label, overflow: TextOverflow.ellipsis),
             );
           }).toList(),
           onChanged: (value) => setState(() => _selectedRecipe = value),
