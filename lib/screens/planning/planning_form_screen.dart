@@ -483,7 +483,18 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
           : null;
 
       // Toujours une recette cloud (RecetteFirestore)
-      final recetteCloud = _selectedRecipe as RecetteFirestore;
+      var recetteCloud = _selectedRecipe as RecetteFirestore;
+
+      // Repas de groupe : tous les membres doivent pouvoir lire la recette.
+      // Si elle n'est pas déjà dans la banque de ce groupe (recette privée ou
+      // d'un autre groupe), on utilise la copie du groupe, créée au besoin.
+      final gid = widget.groupId;
+      if (widget.sourceType == PlanningSourceType.group &&
+          gid != null &&
+          !(recetteCloud.visibility == RecetteVisibility.group &&
+              recetteCloud.groupId == gid)) {
+        recetteCloud = await _recipeForGroup(recetteCloud, gid);
+      }
       final nutrition = recetteCloud.nutrition ?? {};
 
       await _planningService.addToPlanning(
@@ -526,6 +537,22 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  /// Version de [source] disponible dans la banque du groupe [groupId].
+  Future<RecetteFirestore> _recipeForGroup(RecetteFirestore source, String groupId) async {
+    final inGroup = await _recetteService.getGroupRecettes(groupId).first;
+    final wanted = source.name.trim().toLowerCase();
+    for (final r in inGroup) {
+      if (r.name.trim().toLowerCase() == wanted) return r;
+    }
+
+    final newId = await _recetteService.copyToGroup(
+      sourceRecetteId: source.id,
+      groupId: groupId,
+      groupName: widget.groupName,
+    );
+    return await _recetteService.getRecetteById(newId) ?? source;
   }
 
   DateTime _getMealTime(String mealType) {

@@ -1,11 +1,41 @@
 // lib/services/group_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'profile_firestore_service.dart';
 
 class GroupService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  /// Nom affiché dans le groupe tant que le membre n'a pas de profil
+  /// (jamais l'adresse e-mail complète).
+  String _myDisplayName() {
+    final user = FirebaseAuth.instance.currentUser;
+    final name = user?.displayName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final email = user?.email;
+    if (email != null && email.contains('@')) return email.split('@').first;
+    return 'Membre';
+  }
+
+  /// Fiche publique d'un code d'invitation : invites/{code}.
+  /// Elle permet de rejoindre un groupe sans que les groupes soient lisibles
+  /// par tout le monde.
+  Future<void> _writeInvite({
+    required String code,
+    required String groupId,
+    required String groupName,
+    required String description,
+    required String createdBy,
+  }) {
+    return _firestore.collection('invites').doc(code).set({
+      'groupId': groupId,
+      'groupName': groupName,
+      'description': description,
+      'createdBy': createdBy,
+    });
+  }
 
   /// Ajoute mon profil (nom + coefficient) au groupe. Sans effet si je n'ai pas
   /// encore de profil, et sans jamais faire échouer la création / l'arrivée.
@@ -42,10 +72,19 @@ class GroupService {
       await docRef.collection('members').doc(userId).set({
         'userId': userId, // IMPORTANT: on stocke l'userId aussi ici
         'role': 'admin',
+        'displayName': _myDisplayName(),
         'joinedAt': FieldValue.serverTimestamp(),
       });
 
       print('✅ Membre admin ajouté: $userId');
+
+      await _writeInvite(
+        code: inviteCode,
+        groupId: docRef.id,
+        groupName: name,
+        description: description ?? '',
+        createdBy: userId,
+      );
 
       await _addMyProfileToGroup(docRef.id);
 
@@ -62,42 +101,38 @@ class GroupService {
     required String userId,
   }) async {
     try {
-      // Chercher le groupe avec ce code
-      final querySnapshot = await _firestore
-          .collection('groups')
-          .where('inviteCode', isEqualTo: inviteCode)
-          .limit(1)
-          .get();
+      final code = inviteCode.trim().toUpperCase();
 
-      if (querySnapshot.docs.isEmpty) {
+      // Le code mène au groupe via sa fiche d'invitation
+      final invite = await _firestore.collection('invites').doc(code).get();
+      if (!invite.exists || invite.data()?['groupId'] == null) {
         throw 'Code d\'invitation invalide';
       }
 
-      final groupDoc = querySnapshot.docs.first;
+      final groupRef =
+          _firestore.collection('groups').doc(invite.data()!['groupId'] as String);
 
       // Vérifier si l'utilisateur est déjà membre
-      final memberDoc = await groupDoc.reference
-          .collection('members')
-          .doc(userId)
-          .get();
-
+      final memberDoc = await groupRef.collection('members').doc(userId).get();
       if (memberDoc.exists) {
         throw 'Vous êtes déjà membre de ce groupe';
       }
 
-      // Ajouter l'utilisateur comme membre
-      await groupDoc.reference.collection('members').doc(userId).set({
+      // Ajouter l'utilisateur comme membre (le code prouve l'invitation)
+      await groupRef.collection('members').doc(userId).set({
         'userId': userId,
         'role': 'member',
+        'displayName': _myDisplayName(),
+        'inviteCode': code,
         'joinedAt': FieldValue.serverTimestamp(),
       });
 
       // Incrémenter le compteur de membres
-      await groupDoc.reference.update({
+      await groupRef.update({
         'memberCount': FieldValue.increment(1),
       });
 
-      await _addMyProfileToGroup(groupDoc.id);
+      await _addMyProfileToGroup(groupRef.id);
 
       return true;
     } catch (e) {
@@ -109,25 +144,19 @@ class GroupService {
   // Prévisualiser un groupe avec le code d'invitation (NOUVELLE MÉTHODE)
   Future<Map<String, dynamic>?> previewGroupByCode(String inviteCode) async {
     try {
-      final querySnapshot = await _firestore
-          .collection('groups')
-          .where('inviteCode', isEqualTo: inviteCode)
-          .limit(1)
+      final invite = await _firestore
+          .collection('invites')
+          .doc(inviteCode.trim().toUpperCase())
           .get();
+      if (!invite.exists) return null;
 
-      if (querySnapshot.docs.isEmpty) {
-        return null;
-      }
-
-      final groupDoc = querySnapshot.docs.first;
-      final data = groupDoc.data();
-
+      final data = invite.data()!;
       return {
-        'id': groupDoc.id,
-        'name': data['name'],
+        'id': data['groupId'],
+        'name': data['groupName'],
         'description': data['description'] ?? '',
-        'memberCount': data['memberCount'] ?? 0,
-        'inviteCode': data['inviteCode'],
+        'memberCount': null, // non communiqué avant d'avoir rejoint
+        'inviteCode': invite.id,
       };
     } catch (e) {
       print('❌ Erreur preview groupe: $e');
@@ -207,35 +236,61 @@ class GroupService {
     }
   }
 
-  // Récupérer les membres d'un groupe
+  // Récupérer les membres d'un groupe (fiches de membre uniquement : aucun
+  // autre compte n'est lu)
   Stream<List<Map<String, dynamic>>> getGroupMembers(String groupId) {
     return _firestore
         .collection('groups')
         .doc(groupId)
         .collection('members')
         .snapshots()
-        .asyncMap((snapshot) async {
-      List<Map<String, dynamic>> members = [];
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return <String, dynamic>{
+          'userId': data['userId'] ?? doc.id,
+          'role': data['role'],
+          'joinedAt': data['joinedAt'],
+          'displayName': data['displayName'] ?? 'Membre',
+        };
+      }).toList();
+    });
+  }
 
-      for (var doc in snapshot.docs) {
-        final userId = doc.data()['userId'] ?? doc.id;
-        final memberData = doc.data();
+  /// Remet ma fiche de membre à jour (nom affiché) et, si je suis
+  /// administrateur, crée la fiche d'invitation d'un groupe plus ancien.
+  /// Sans effet bloquant : toute erreur est ignorée.
+  Future<void> syncMembership(String groupId, String userId) async {
+    try {
+      final groupRef = _firestore.collection('groups').doc(groupId);
+      final memberRef = groupRef.collection('members').doc(userId);
+      final member = await memberRef.get();
+      if (!member.exists) return;
 
-        // Récupérer les infos utilisateur
-        final userDoc = await _firestore.collection('users').doc(userId).get();
-
-        if (userDoc.exists) {
-          members.add({
-            'userId': userId,
-            'role': memberData['role'],
-            'joinedAt': memberData['joinedAt'],
-            ...userDoc.data()!,
-          });
-        }
+      if (member.data()?['displayName'] == null) {
+        await memberRef.update({'displayName': _myDisplayName()});
       }
 
-      return members;
-    });
+      if (member.data()?['role'] == 'admin') {
+        final group = await groupRef.get();
+        final data = group.data();
+        final code = data?['inviteCode'] as String?;
+        if (data != null && code != null) {
+          final invite = await _firestore.collection('invites').doc(code).get();
+          if (!invite.exists) {
+            await _writeInvite(
+              code: code,
+              groupId: groupId,
+              groupName: (data['name'] ?? '') as String,
+              description: (data['description'] ?? '') as String,
+              createdBy: userId,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print('⚠️ Synchronisation de la fiche de membre: $e');
+    }
   }
 
   // Quitter un groupe
@@ -254,7 +309,8 @@ class GroupService {
         final membersSnapshot = await groupRef.collection('members').get();
 
         if (membersSnapshot.docs.length == 1) {
-          // Dernier membre : supprimer le groupe
+          // Dernier membre : supprimer le groupe et sa fiche d'invitation
+          await _deleteInviteOf(groupRef);
           await groupRef.delete();
           return true;
         } else {
@@ -268,13 +324,13 @@ class GroupService {
         }
       }
 
-      // Supprimer le membre
-      await memberRef.delete();
-
-      // Décrémenter le compteur
+      // Décrémenter le compteur (tant que je suis encore membre)
       await groupRef.update({
         'memberCount': FieldValue.increment(-1),
       });
+
+      // Supprimer le membre
+      await memberRef.delete();
 
       return true;
     } catch (e) {
@@ -295,7 +351,8 @@ class GroupService {
         throw 'Vous devez être administrateur pour supprimer ce groupe';
       }
 
-      // Supprimer le groupe (cascade automatique des sous-collections)
+      // Supprimer la fiche d'invitation puis le groupe
+      await _deleteInviteOf(groupRef);
       await groupRef.delete();
 
       return true;
@@ -335,14 +392,46 @@ class GroupService {
     return List.generate(6, (index) => chars[random.nextInt(chars.length)]).join();
   }
 
+  /// Supprime la fiche d'invitation du groupe (si elle existe).
+  Future<void> _deleteInviteOf(DocumentReference<Map<String, dynamic>> groupRef) async {
+    try {
+      final group = await groupRef.get();
+      final code = group.data()?['inviteCode'] as String?;
+      if (code != null) {
+        await _firestore.collection('invites').doc(code).delete();
+      }
+    } catch (e) {
+      print('⚠️ Suppression de la fiche d\'invitation: $e');
+    }
+  }
+
   // Régénérer le code d'invitation
   Future<String?> regenerateInviteCode(String groupId) async {
     try {
+      final groupRef = _firestore.collection('groups').doc(groupId);
+      final group = await groupRef.get();
+      final data = group.data();
+      if (data == null) return null;
+
       final newCode = _generateInviteCode();
 
-      await _firestore.collection('groups').doc(groupId).update({
-        'inviteCode': newCode,
-      });
+      await groupRef.update({'inviteCode': newCode});
+
+      // L'ancien code cesse de fonctionner
+      final oldCode = data['inviteCode'] as String?;
+      if (oldCode != null) {
+        try {
+          await _firestore.collection('invites').doc(oldCode).delete();
+        } catch (_) {}
+      }
+
+      await _writeInvite(
+        code: newCode,
+        groupId: groupId,
+        groupName: (data['name'] ?? '') as String,
+        description: (data['description'] ?? '') as String,
+        createdBy: (data['createdBy'] ?? '') as String,
+      );
 
       return newCode;
     } catch (e) {

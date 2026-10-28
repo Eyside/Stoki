@@ -34,6 +34,10 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
     _loadGroupDetails();
     // Mon profil est ajouté automatiquement au groupe (sans effet si je n'en
     // ai pas encore).
+    final uid = _authService.currentUser?.uid;
+    if (uid != null) {
+      _groupService.syncMembership(widget.groupId, uid);
+    }
     _profileService.syncToGroup(widget.groupId).catchError((e) {
       debugPrint('⚠️ Ajout du profil au groupe: $e');
     });

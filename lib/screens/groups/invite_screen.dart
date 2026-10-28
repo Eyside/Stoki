@@ -332,14 +332,16 @@ class _InviteScreenState extends State<InviteScreen> with SingleTickerProviderSt
                                         fontSize: 14,
                                       ),
                                     ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${_groupPreview!['memberCount'] ?? 0} membre(s)',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 12,
+                                  if (_groupPreview!['memberCount'] != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_groupPreview!['memberCount']} membre(s)',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 12,
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ],
                               ),
                             ),
