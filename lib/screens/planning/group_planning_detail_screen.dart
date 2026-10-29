@@ -45,6 +45,9 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
   /// Repas que j'ai déjà consommés (suivi calorique personnel).
   Set<String> _myConsumedIds = {};
 
+  /// Prénoms des membres du groupe (uid -> nom), pour « Planifié par ».
+  Map<String, String> _memberNames = {};
+
   DateTime _selectedDate = DateTime.now();
   DateTime _focusedDay = DateTime.now();
   String? _selectedMealType;
@@ -496,7 +499,12 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(planning.visibilityLabel),
+            Text(
+              (planning.visibility == PlanningVisibility.group &&
+                      planning.ownerId != _authService.currentUser?.uid)
+                  ? 'Planifié par ${_memberNames[planning.ownerId] ?? 'un membre'}'
+                  : planning.visibilityLabel,
+            ),
             const SizedBox(height: 4),
             Row(
               children: [
@@ -531,7 +539,8 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
             ),
           ],
         ),
-        trailing: planning.isConsumed
+        trailing: (planning.isConsumed ||
+                planning.ownerId != _authService.currentUser?.uid)
             ? null
             : PopupMenuButton<String>( // ✅ AJOUTÉ <String>
           itemBuilder: (context) => <PopupMenuEntry<String>>[ // ✅ AJOUTÉ <PopupMenuEntry<String>>
@@ -567,6 +576,16 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
       }
     }
     _myConsumedIds = consumed;
+
+    final gid = widget.groupId;
+    if (widget.sourceType == PlanningSourceType.group && gid != null) {
+      try {
+        final members = await ref.read(profileFirestoreServiceProvider).getGroupMembers(gid);
+        _memberNames = {for (final m in members) m.uid: m.name};
+      } catch (e) {
+        debugPrint('Erreur chargement des prénoms: $e');
+      }
+    }
     return plannings;
   }
 
@@ -875,11 +894,11 @@ class _GroupPlanningDetailScreenState extends ConsumerState<GroupPlanningDetailS
 
         case PlanningSourceType.group:
         // Charger uniquement les plannings du groupe sélectionné
+          // Repas de TOUS les membres du groupe
           if (widget.groupId != null) {
-            final cloud = await _planningService.getPlanningForDate(date).first;
-            all.addAll(cloud.where((p) =>
-            p.visibility == PlanningVisibility.group && p.groupId == widget.groupId
-            ));
+            final cloud =
+                await _planningService.getGroupPlanningForDate(widget.groupId!, date).first;
+            all.addAll(cloud);
           }
           break;
       }

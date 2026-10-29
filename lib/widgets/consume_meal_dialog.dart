@@ -234,7 +234,7 @@ class _ConsumeMealDialogState extends State<ConsumeMealDialog> {
       padding: const EdgeInsets.all(20),
       children: [
         Text(
-          'Les ingrédients de ce repas (pour ${_eatersLabel()}) seront retirés de votre stock.',
+          'Les ingrédients de ce repas (pour ${_eatersLabel()}) seront retirés du ${widget.planning.visibility == PlanningVisibility.group ? 'stock du groupe' : 'stock privé'}.',
           style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
         ),
         const SizedBox(height: 16),

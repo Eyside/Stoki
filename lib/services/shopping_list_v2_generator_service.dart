@@ -2,6 +2,7 @@
 // Service de génération de liste avec répartition intelligente par source
 // VERSION CLOUD: Utilise IngredientFirestore au lieu d'Ingredient local
 
+import '../models/frigo_firestore.dart';
 import '../models/recette_firestore.dart';
 import '../services/planning_firestore_service.dart';
 import '../services/recette_firestore_service.dart';
@@ -115,6 +116,8 @@ class ShoppingListV2GeneratorService {
           : planningService.getGroupPlanning(sourceId).first);
 
       final filteredPlannings = plannings.where((p) {
+        // Un repas déjà cuisiné a déjà consommé son stock : plus de besoin.
+        if (p.cooked) return false;
         return p.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
             p.date.isBefore(endDate.add(const Duration(days: 1)));
       }).toList();
@@ -262,8 +265,15 @@ class ShoppingListV2GeneratorService {
       ) async {
     print('\n🔄 Soustraction du stock...');
 
-    // Récupérer tout le stock
-    final allStock = await frigoService.getMyStock().first;
+    // Stock privé + stock de chaque groupe demandé (tous les membres)
+    final allStock = <FrigoFirestore>[];
+    if (sources.contains('private')) {
+      final mine = await frigoService.getMyStock().first;
+      allStock.addAll(mine.where((i) => i.visibility == FrigoVisibility.private));
+    }
+    for (final sourceId in sources.where((s) => s != 'private')) {
+      allStock.addAll(await frigoService.getGroupStock(sourceId).first);
+    }
     print('   → ${allStock.length} article(s) en stock');
 
     for (final stockItem in allStock) {

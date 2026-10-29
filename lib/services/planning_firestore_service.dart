@@ -152,6 +152,27 @@ class PlanningFirestoreService {
   }
 
   // ============================================================================
+  // RÉCUPÉRER LE PLANNING D'UN GROUPE POUR UNE DATE (repas de tous les membres)
+  // ============================================================================
+  Stream<List<PlanningFirestore>> getGroupPlanningForDate(String groupId, DateTime date) {
+    final startOfDay = DateTime(date.year, date.month, date.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    return _planningCollection
+        .where('groupId', isEqualTo: groupId)
+        .where('visibility', isEqualTo: 'group')
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .where('date', isLessThan: Timestamp.fromDate(endOfDay))
+        .orderBy('date')
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => PlanningFirestore.fromFirestore(doc))
+          .toList();
+    });
+  }
+
+  // ============================================================================
   // RÉCUPÉRER LE PLANNING POUR UNE DATE
   // ============================================================================
   Stream<List<PlanningFirestore>> getPlanningForDate(DateTime date) {

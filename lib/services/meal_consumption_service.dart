@@ -124,15 +124,26 @@ class MealConsumptionService {
   // ==========================================================================
 
   /// [scale] = part du repas par rapport à la recette de base.
+  /// Stock concerné par un repas : repas de groupe = stock du groupe (tous les
+  /// membres) ; repas privé = mon stock privé.
+  Future<List<FrigoFirestore>> _stockFor(String? groupId) async {
+    if (groupId != null) {
+      return _frigoService.getGroupStock(groupId).first;
+    }
+    final mine = await _frigoService.getAllMyStocks().first;
+    return mine.where((i) => i.visibility == FrigoVisibility.private).toList();
+  }
+
   Future<List<IngredientStockAdjustment>> checkStockAvailability(
       String recetteId, {
         double scale = 1.0,
+        String? groupId,
       }) async {
     final adjustments = <IngredientStockAdjustment>[];
 
     try {
       final ingredients = await _recetteService.getIngredients(recetteId);
-      final stock = await _frigoService.getAllMyStocks().first;
+      final stock = await _stockFor(groupId);
 
       for (final ingredient in ingredients) {
         final neededQuantity = ingredient.quantity * scale;
@@ -206,7 +217,9 @@ class MealConsumptionService {
       }
 
       final ingredients = await _recetteService.getIngredients(planning.recetteId);
-      final stock = await _frigoService.getAllMyStocks().first;
+      final stock = await _stockFor(
+        planning.visibility == PlanningVisibility.group ? planning.groupId : null,
+      );
 
       for (final ingredient in ingredients) {
         final missing = await _deductIngredientFromStock(
@@ -397,7 +410,11 @@ class MealConsumptionService {
       PlanningFirestore planning, {
         double scale = 1.0,
       }) async {
-    final adjustments = await checkStockAvailability(planning.recetteId, scale: scale);
+    final adjustments = await checkStockAvailability(
+      planning.recetteId,
+      scale: scale,
+      groupId: planning.visibility == PlanningVisibility.group ? planning.groupId : null,
+    );
 
     final totalIngredientsCount = adjustments.length;
     final availableCount = adjustments.where((a) => a.sufficient).length;
