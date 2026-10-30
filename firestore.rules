@@ -211,7 +211,13 @@ service cloud.firestore {
          isMember(resource.data.groupId))
       );
 
-      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+      // Propriétaire ; pour une recette de groupe, n'importe quel membre
+      allow delete: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.visibility == 'group' &&
+         resource.data.groupId != null &&
+         isMember(resource.data.groupId))
+      );
 
       // Ingrédients de la recette : mêmes droits que la recette
       match /ingredients/{ingredientId} {

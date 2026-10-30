@@ -5,6 +5,8 @@
 
 import 'package:flutter/material.dart';
 import '../models/planning_firestore.dart';
+import '../services/auth_service.dart';
+import '../services/group_service.dart';
 import '../services/meal_consumption_service.dart';
 import '../utils/portion_calculator.dart';
 
@@ -35,6 +37,11 @@ class _ConsumeMealDialogState extends State<ConsumeMealDialog> {
   List<IngredientStockAdjustment>? _adjustments;
   Map<EaterPortion, double>? _caloriesByEater;
 
+  /// Stocks utilisables pour cuisiner : (identifiant, libellé).
+  /// L'identifiant est 'private' ou celui d'un groupe.
+  List<MapEntry<String, String>> _stockOptions = [];
+  Set<String> _stockSources = {};
+
   bool get _isCook => widget.action == MealAction.cook;
 
   @override
@@ -48,10 +55,14 @@ class _ConsumeMealDialogState extends State<ConsumeMealDialog> {
 
     try {
       if (_isCook) {
+        if (_stockOptions.isEmpty) await _loadStockOptions();
         final scale = await widget.consumptionService
             .computeScale(widget.planning.recetteId, widget.eaters);
-        final summary = await widget.consumptionService
-            .getMealConsumptionSummary(widget.planning, scale: scale);
+        final summary = await widget.consumptionService.getMealConsumptionSummary(
+          widget.planning,
+          scale: scale,
+          stockSources: _stockSources,
+        );
         _summary = summary;
         _adjustments = summary['adjustments'] as List<IngredientStockAdjustment>;
       } else {
@@ -73,6 +84,45 @@ class _ConsumeMealDialogState extends State<ConsumeMealDialog> {
     }
   }
 
+  /// Propose mon stock privé et le stock de chacun de mes groupes ; le stock
+  /// du repas (groupe ou privé) est coché d'office.
+  Future<void> _loadStockOptions() async {
+    final options = <MapEntry<String, String>>[
+      const MapEntry(MealConsumptionService.privateStockId, 'Mon stock privé'),
+    ];
+    try {
+      final uid = AuthService().currentUser?.uid;
+      if (uid != null) {
+        final groups = await GroupService().getUserGroups(uid).first;
+        for (final g in groups) {
+          options.add(MapEntry(g['id'] as String, 'Stock : ${g['name'] ?? 'Groupe'}'));
+        }
+      }
+    } catch (_) {}
+
+    // Le groupe du repas doit toujours être proposé
+    final gid = widget.planning.groupId;
+    if (gid != null && !options.any((o) => o.key == gid)) {
+      options.add(MapEntry(gid, 'Stock du groupe'));
+    }
+
+    _stockOptions = options;
+    _stockSources = MealConsumptionService.defaultStockSources(widget.planning);
+  }
+
+  void _toggleStock(String id, bool selected) {
+    if (!selected && _stockSources.length <= 1) return; // au moins un stock
+    setState(() {
+      _stockSources = {..._stockSources};
+      if (selected) {
+        _stockSources.add(id);
+      } else {
+        _stockSources.remove(id);
+      }
+    });
+    _load();
+  }
+
   Future<void> _confirm() async {
     setState(() => _confirming = true);
 
@@ -81,6 +131,7 @@ class _ConsumeMealDialogState extends State<ConsumeMealDialog> {
           ? await widget.consumptionService.cookMeal(
         planning: widget.planning,
         eaters: widget.eaters,
+        stockSources: _stockSources,
       )
           : await widget.consumptionService.consumeMeal(
         planning: widget.planning,
@@ -234,8 +285,26 @@ class _ConsumeMealDialogState extends State<ConsumeMealDialog> {
       padding: const EdgeInsets.all(20),
       children: [
         Text(
-          'Les ingrédients de ce repas (pour ${_eatersLabel()}) seront retirés du ${widget.planning.visibility == PlanningVisibility.group ? 'stock du groupe' : 'stock privé'}.',
+          'Les ingrédients de ce repas (pour ${_eatersLabel()}) seront retirés des stocks cochés :',
           style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: _stockOptions.map((o) {
+            return FilterChip(
+              avatar: Icon(
+                o.key == MealConsumptionService.privateStockId
+                    ? Icons.lock_person
+                    : Icons.group,
+                size: 18,
+              ),
+              label: Text(o.value),
+              selected: _stockSources.contains(o.key),
+              onSelected: (v) => _toggleStock(o.key, v),
+            );
+          }).toList(),
         ),
         const SizedBox(height: 16),
         _buildStockStatusCard(canConsume, missingCount),

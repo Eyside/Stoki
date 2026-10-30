@@ -124,26 +124,42 @@ class MealConsumptionService {
   // ==========================================================================
 
   /// [scale] = part du repas par rapport à la recette de base.
-  /// Stock concerné par un repas : repas de groupe = stock du groupe (tous les
-  /// membres) ; repas privé = mon stock privé.
-  Future<List<FrigoFirestore>> _stockFor(String? groupId) async {
-    if (groupId != null) {
-      return _frigoService.getGroupStock(groupId).first;
+  /// Identifiant du stock privé dans une sélection de stocks.
+  static const String privateStockId = 'private';
+
+  /// Stock proposé par défaut pour un repas : celui du groupe pour un repas
+  /// de groupe, mon stock privé sinon.
+  static Set<String> defaultStockSources(PlanningFirestore planning) {
+    if (planning.visibility == PlanningVisibility.group && planning.groupId != null) {
+      return {planning.groupId!};
     }
-    final mine = await _frigoService.getAllMyStocks().first;
-    return mine.where((i) => i.visibility == FrigoVisibility.private).toList();
+    return {privateStockId};
+  }
+
+  /// Produits des stocks choisis : 'private' = mon stock privé, sinon
+  /// l'identifiant d'un groupe (stock commun à tous ses membres).
+  Future<List<FrigoFirestore>> _stockFor(Set<String> sources) async {
+    final result = <FrigoFirestore>[];
+    if (sources.contains(privateStockId)) {
+      final mine = await _frigoService.getAllMyStocks().first;
+      result.addAll(mine.where((i) => i.visibility == FrigoVisibility.private));
+    }
+    for (final groupId in sources.where((id) => id != privateStockId)) {
+      result.addAll(await _frigoService.getGroupStock(groupId).first);
+    }
+    return result;
   }
 
   Future<List<IngredientStockAdjustment>> checkStockAvailability(
       String recetteId, {
         double scale = 1.0,
-        String? groupId,
+        Set<String> stockSources = const {privateStockId},
       }) async {
     final adjustments = <IngredientStockAdjustment>[];
 
     try {
       final ingredients = await _recetteService.getIngredients(recetteId);
-      final stock = await _stockFor(groupId);
+      final stock = await _stockFor(stockSources);
 
       for (final ingredient in ingredients) {
         final neededQuantity = ingredient.quantity * scale;
@@ -194,6 +210,7 @@ class MealConsumptionService {
   Future<MealConsumptionResult> cookMeal({
     required PlanningFirestore planning,
     required List<EaterPortion> eaters,
+    Set<String>? stockSources,
   }) async {
     if (planning.cooked) {
       return MealConsumptionResult(
@@ -217,9 +234,7 @@ class MealConsumptionService {
       }
 
       final ingredients = await _recetteService.getIngredients(planning.recetteId);
-      final stock = await _stockFor(
-        planning.visibility == PlanningVisibility.group ? planning.groupId : null,
-      );
+      final stock = await _stockFor(stockSources ?? defaultStockSources(planning));
 
       for (final ingredient in ingredients) {
         final missing = await _deductIngredientFromStock(
@@ -409,11 +424,12 @@ class MealConsumptionService {
   Future<Map<String, dynamic>> getMealConsumptionSummary(
       PlanningFirestore planning, {
         double scale = 1.0,
+        Set<String>? stockSources,
       }) async {
     final adjustments = await checkStockAvailability(
       planning.recetteId,
       scale: scale,
-      groupId: planning.visibility == PlanningVisibility.group ? planning.groupId : null,
+      stockSources: stockSources ?? defaultStockSources(planning),
     );
 
     final totalIngredientsCount = adjustments.length;

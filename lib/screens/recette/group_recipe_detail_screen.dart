@@ -399,7 +399,9 @@ class _GroupRecipeDetailScreenState extends ConsumerState<GroupRecipeDetailScree
                           ],
                         ),
                       ),
-                      if (recipe.ownerId == userId)
+                      // Recette de groupe : tout membre peut la supprimer
+                      if (recipe.ownerId == userId ||
+                          recipe.visibility == RecetteVisibility.group)
                         const PopupMenuItem(
                           value: 'delete',
                           child: Row(

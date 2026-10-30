@@ -189,6 +189,86 @@ class FrigoFirestoreService {
   }
 
   // ============================================================================
+  // TRANSFÉRER UN PRODUIT VERS UN AUTRE STOCK
+  // ============================================================================
+
+  /// Déplace [quantity] de [item] vers [destination] : 'private' (mon stock
+  /// privé) ou l'identifiant d'un groupe. Si le même produit (même unité)
+  /// existe déjà là-bas, les quantités s'additionnent. Le produit d'origine
+  /// diminue, ou disparaît si tout est transféré.
+  Future<void> transferItem({
+    required FrigoFirestore item,
+    required String destination,
+    required double quantity,
+  }) async {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) throw Exception('User not authenticated');
+
+    final toPrivate = destination == 'private';
+    if (quantity <= 0 || quantity > item.quantity + 0.000001) {
+      throw Exception('Quantité invalide');
+    }
+    final sameStock = toPrivate
+        ? (item.visibility == FrigoVisibility.private && item.ownerId == userId)
+        : (item.visibility == FrigoVisibility.group && item.groupId == destination);
+    if (sameStock) throw Exception('Le produit est déjà dans ce stock');
+
+    // 1. Produit identique déjà présent dans le stock de destination ?
+    final Query query = toPrivate
+        ? _frigoCollection
+            .where('ownerId', isEqualTo: userId)
+            .where('visibility', isEqualTo: 'private')
+        : _frigoCollection
+            .where('groupId', isEqualTo: destination)
+            .where('visibility', isEqualTo: 'group');
+    final existing = (await query.get())
+        .docs
+        .map((doc) => FrigoFirestore.fromFirestore(doc))
+        .where((i) => i.ingredientId == item.ingredientId && i.unit == item.unit)
+        .toList();
+
+    // 2. Ajouter à la destination (d'abord, pour ne rien perdre en cas d'erreur)
+    if (existing.isNotEmpty) {
+      final target = existing.first;
+      DateTime? best = target.bestBefore;
+      if (item.bestBefore != null &&
+          (best == null || item.bestBefore!.isBefore(best))) {
+        best = item.bestBefore; // on garde la date la plus proche
+      }
+      await updateFrigoItem(
+        frigoId: target.id,
+        quantity: target.quantity + quantity,
+        bestBefore: best,
+      );
+    } else {
+      await addToFrigo(
+        ingredientId: item.ingredientId,
+        ingredientName: item.ingredientName,
+        quantity: quantity,
+        unit: item.unit,
+        location: item.location,
+        bestBefore: item.bestBefore,
+        visibility: toPrivate ? FrigoVisibility.private : FrigoVisibility.group,
+        groupId: toPrivate ? null : destination,
+        caloriesPer100g: item.caloriesPer100g,
+        proteinsPer100g: item.proteinsPer100g,
+        fatsPer100g: item.fatsPer100g,
+        carbsPer100g: item.carbsPer100g,
+        fibersPer100g: item.fibersPer100g,
+        densityGPerMl: item.densityGPerMl,
+        avgWeightPerUnitG: item.avgWeightPerUnitG,
+      );
+    }
+
+    // 3. Retirer de l'origine
+    if (quantity >= item.quantity - 0.000001) {
+      await deleteFrigoItem(item.id);
+    } else {
+      await updateFrigoItem(frigoId: item.id, quantity: item.quantity - quantity);
+    }
+  }
+
+  // ============================================================================
   // MIGRER VERS UN GROUPE
   // ============================================================================
   Future<void> migrateToGroup({

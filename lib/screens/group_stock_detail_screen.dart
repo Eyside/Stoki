@@ -3,7 +3,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../services/auth_service.dart';
 import '../services/frigo_firestore_service.dart';
+import '../services/group_service.dart';
 import '../services/openfoodfacts_service.dart';
 import '../services/ingredient_firestore_service.dart';
 import '../models/frigo_firestore.dart';
@@ -262,7 +264,7 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
   }
 
   void _showDetails(FrigoFirestore item) {
-    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (c) => Container(decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))), padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)))), const SizedBox(height: 24), Text(item.ingredientName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)), const SizedBox(height: 20), _row('📍', _getLoc(item.location)), _row('📊', '${item.quantity} ${item.unit}'), if (item.bestBefore != null) _row('📅', _getDate(item.bestBefore!)), _row('👁️', item.visibility == FrigoVisibility.private ? 'Privé' : 'Groupe'), _row('🔥', '${item.caloriesPer100g.toStringAsFixed(0)} kcal/100g'), const SizedBox(height: 24), Row(children: [Expanded(child: OutlinedButton.icon(onPressed: () {Navigator.pop(c); _edit(item);}, icon: const Icon(Icons.edit_outlined), label: const Text('Modifier'))), const SizedBox(width: 12), Expanded(child: ElevatedButton.icon(onPressed: () {Navigator.pop(c); _delete(item);}, icon: const Icon(Icons.delete_outline), label: const Text('Supprimer'), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white)))]), SizedBox(height: MediaQuery.of(c).padding.bottom)])));
+    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (c) => Container(decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))), padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)))), const SizedBox(height: 24), Text(item.ingredientName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)), const SizedBox(height: 20), _row('📍', _getLoc(item.location)), _row('📊', '${item.quantity} ${item.unit}'), if (item.bestBefore != null) _row('📅', _getDate(item.bestBefore!)), _row('👁️', item.visibility == FrigoVisibility.private ? 'Privé' : 'Groupe'), _row('🔥', '${item.caloriesPer100g.toStringAsFixed(0)} kcal/100g'), const SizedBox(height: 24), Row(children: [Expanded(child: OutlinedButton.icon(onPressed: () {Navigator.pop(c); _edit(item);}, icon: const Icon(Icons.edit_outlined), label: const Text('Modifier'))), const SizedBox(width: 12), Expanded(child: ElevatedButton.icon(onPressed: () {Navigator.pop(c); _delete(item);}, icon: const Icon(Icons.delete_outline), label: const Text('Supprimer'), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white)))]), const SizedBox(height: 12), SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () {Navigator.pop(c); _transfer(item);}, icon: const Icon(Icons.swap_horiz), label: const Text('Transférer vers un autre stock'))), SizedBox(height: MediaQuery.of(c).padding.bottom)])));
   }
 
   Widget _row(String label, String value) => Padding(padding: const EdgeInsets.only(bottom: 16), child: Row(children: [SizedBox(width: 60, child: Text(label, style: const TextStyle(fontSize: 18))), Expanded(child: Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)))]));
@@ -304,6 +306,123 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: const Color(0xFFEF4444)));
     }
+  }
+
+  /// Transfère tout ou partie d'un produit vers mon stock privé ou le stock
+  /// d'un de mes groupes.
+  Future<void> _transfer(FrigoFirestore item) async {
+    final uid = AuthService().currentUser?.uid;
+    if (uid == null) return;
+
+    // Destinations possibles : mon stock privé + mes groupes (sauf le stock actuel)
+    final destinations = <MapEntry<String, String>>[];
+    final inMyPrivate = item.visibility == FrigoVisibility.private && item.ownerId == uid;
+    if (!inMyPrivate) destinations.add(const MapEntry('private', 'Mon stock privé'));
+    try {
+      final groups = await GroupService().getUserGroups(uid).first;
+      for (final g in groups) {
+        final id = g['id'] as String;
+        if (item.visibility == FrigoVisibility.group && item.groupId == id) continue;
+        destinations.add(MapEntry(id, 'Stock : ${g['name'] ?? 'Groupe'}'));
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+    if (destinations.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aucun autre stock disponible')),
+      );
+      return;
+    }
+
+    final qtyCtrl = TextEditingController(text: _formatQty(item.quantity));
+    String? chosen = destinations.first.key;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (_, setState) => AlertDialog(
+          title: Text('Transférer ${item.ingredientName}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Vers :', style: TextStyle(color: Colors.grey.shade700)),
+                ...destinations.map((d) => RadioListTile<String>(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      value: d.key,
+                      groupValue: chosen,
+                      title: Text(d.value),
+                      onChanged: (v) => setState(() => chosen = v),
+                    )),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: qtyCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Quantité à transférer',
+                    suffixText: item.unit,
+                    helperText: 'Disponible : ${_formatQty(item.quantity)} ${item.unit}',
+                    border: const OutlineInputBorder(),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Annuler')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(c, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Transférer'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (ok != true || chosen == null) return;
+
+    final qty = double.tryParse(qtyCtrl.text.replaceAll(',', '.'));
+    if (qty == null || qty <= 0 || qty > item.quantity + 0.000001) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Quantité invalide (maximum ${_formatQty(item.quantity)} ${item.unit})'),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await _frigoService.transferItem(item: item, destination: chosen!, quantity: qty);
+      if (!mounted) return;
+      final label = destinations.firstWhere((d) => d.key == chosen).value;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_formatQty(qty)} ${item.unit} de ${item.ingredientName} → $label'),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e'), backgroundColor: const Color(0xFFEF4444)),
+      );
+    }
+  }
+
+  String _formatQty(double q) {
+    final rounded = (q * 100).round() / 100;
+    return rounded == rounded.roundToDouble()
+        ? rounded.toStringAsFixed(0)
+        : rounded.toString();
   }
 
   Future<void> _delete(FrigoFirestore item) async {
