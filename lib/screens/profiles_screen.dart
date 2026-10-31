@@ -277,7 +277,7 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
             const Text('Niveau d\'activité', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _activityLevel,
+              initialValue: _activityLevel,
               decoration: const InputDecoration(border: OutlineInputBorder()),
               items: const [
                 DropdownMenuItem(value: 'sedentary', child: Text('Sédentaire')),

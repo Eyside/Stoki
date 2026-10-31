@@ -21,7 +21,7 @@ class _ShoppingPlanningSelectionScreenState
   final _groupService = GroupService();
 
   List<Map<String, dynamic>> _userGroups = [];
-  Set<String> _selectedSources = {'private'}; // Sources cochées
+  final Set<String> _selectedSources = {'private'}; // Sources cochées
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now().add(const Duration(days: 7));
   bool _subtractStock = true;
@@ -260,7 +260,7 @@ class _ShoppingPlanningSelectionScreenState
                           subtitle: '${group['memberCount'] ?? 0} membre(s)',
                         ),
                       );
-                    }).toList(),
+                    }),
 
                   if (_userGroups.isEmpty)
                     Container(
@@ -332,7 +332,7 @@ class _ShoppingPlanningSelectionScreenState
                             : 'Tous les ingrédients seront ajoutés',
                         style: const TextStyle(fontSize: 12),
                       ),
-                      activeColor: Colors.green,
+                      activeThumbColor: Colors.green,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     ),
                   ),

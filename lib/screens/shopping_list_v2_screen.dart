@@ -4,7 +4,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/shopping_list_v2_generator_service.dart';
-import '../services/shopping_list_cloud_service.dart';
 import '../services/frigo_firestore_service.dart';
 import '../providers.dart';
 import '../utils/shopping_list_category_helper.dart';
@@ -33,23 +32,20 @@ class ShoppingListV2Screen extends ConsumerStatefulWidget {
 
 class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
   late ShoppingListV2GeneratorService _generatorService;
-  late ShoppingListCloudService _cloudService;
   late FrigoFirestoreService _frigoService;
 
   List<ShoppingItemWithOrigin> _items = [];
-  Set<String> _selectedItemIds = {};
   bool _isLoading = true;
   bool _showCompleted = false;
   bool _viewByCategory = true;
 
   // Destinations pour chaque item
-  Map<String, String> _itemDestinations = {}; // itemId -> destination
+  final Map<String, String> _itemDestinations = {}; // itemId -> destination
 
   @override
   void initState() {
     super.initState();
     _generatorService = ref.read(shoppingListV2GeneratorServiceProvider);
-    _cloudService = ref.read(shoppingListCloudServiceProvider);
     _frigoService = ref.read(frigoFirestoreServiceProvider);
     _generateList();
   }
@@ -98,8 +94,8 @@ class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
       body: _isLoading ? _buildLoading() : _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: _addManualItem,
-        child: const Icon(Icons.add),
         tooltip: 'Ajouter un article',
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -878,7 +874,6 @@ class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
     );
 
     int addedCount = 0;
-    int errorCount = 0;
 
     for (final item in completedItems) {
       try {
@@ -922,7 +917,6 @@ class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
         addedCount++;
       } catch (e) {
         debugPrint('❌ Erreur ajout au stock: $e');
-        errorCount++;
       }
     }
 
@@ -1031,7 +1025,7 @@ class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: unit,
+                    initialValue: unit,
                     decoration: const InputDecoration(
                       labelText: 'Unité',
                       border: OutlineInputBorder(),
@@ -1064,7 +1058,6 @@ class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
     );
 
     if (ok == true && nameCtrl.text.isNotEmpty) {
-      final quantity = double.tryParse(quantityCtrl.text) ?? 1.0;
       // TODO: Ajouter à la liste
     }
   }

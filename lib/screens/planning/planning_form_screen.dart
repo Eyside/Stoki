@@ -327,7 +327,7 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<dynamic>(
-          value: _selectedRecipe,
+          initialValue: _selectedRecipe,
           decoration: InputDecoration(
             filled: true,
             fillColor: Colors.white,
@@ -378,7 +378,7 @@ class _PlanningFormScreenState extends ConsumerState<PlanningFormScreen> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: _selectedMealType,
+          initialValue: _selectedMealType,
           decoration: InputDecoration(
             filled: true,
             fillColor: Colors.white,
