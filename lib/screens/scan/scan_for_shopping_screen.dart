@@ -373,7 +373,7 @@ class _ScanForShoppingScreenState extends ConsumerState<ScanForShoppingScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: _selectedUnit,
+                            initialValue: _selectedUnit,
                             decoration: const InputDecoration(
                               border: OutlineInputBorder(),
                               labelText: 'Unité',

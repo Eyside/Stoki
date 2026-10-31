@@ -139,7 +139,7 @@ class _RecetteFirestoreFormState extends ConsumerState<RecetteFirestoreForm> {
 
               // Unité
               DropdownButtonFormField<String>(
-                value: unite,
+                initialValue: unite,
                 decoration: const InputDecoration(
                   labelText: "Unité",
                   border: OutlineInputBorder(),
@@ -376,7 +376,7 @@ class _RecetteFirestoreFormState extends ConsumerState<RecetteFirestoreForm> {
 
             // Catégorie
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               decoration: const InputDecoration(
                 labelText: 'Catégorie',
                 border: OutlineInputBorder(),

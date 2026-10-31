@@ -786,7 +786,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: unit,
+                      initialValue: unit,
                       decoration: const InputDecoration(
                         labelText: 'Unité',
                         border: OutlineInputBorder(),
@@ -805,7 +805,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: category,
+                initialValue: category,
                 decoration: const InputDecoration(
                   labelText: 'Catégorie',
                   border: OutlineInputBorder(),
@@ -1208,7 +1208,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
                 const Text('Source du planning:', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<ShoppingListSource>(
-                  value: sourceType,
+                  initialValue: sourceType,
                   decoration: const InputDecoration(
                     labelText: 'Depuis quel planning ?',
                     border: OutlineInputBorder(),
@@ -1228,7 +1228,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
                 if (sourceType == ShoppingListSource.group) ...[
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: groupId,
+                    initialValue: groupId,
                     decoration: const InputDecoration(
                       labelText: 'Groupe',
                       border: OutlineInputBorder(),
@@ -1413,7 +1413,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
                     value: subtractStock,
                     onChanged: (v) => setDialogState(() => subtractStock = v),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    activeColor: Colors.green,
+                    activeThumbColor: Colors.green,
                   ),
                 ),
               ],
@@ -1626,7 +1626,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: unit,
+                        initialValue: unit,
                         decoration: const InputDecoration(
                           labelText: 'Unité',
                           border: OutlineInputBorder(),
@@ -1645,7 +1645,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: category,
+                  initialValue: category,
                   decoration: const InputDecoration(
                     labelText: 'Catégorie (optionnel)',
                     border: OutlineInputBorder(),
