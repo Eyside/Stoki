@@ -41,3 +41,13 @@ captures/
 **/*.hprof
 *.log
 **/*.log
+# Journaux et captures de débogage
+*.log
+/flutter_*.png
+bfg.jar
+
+# Clés de signature (ne jamais publier)
+*.jks
+*.keystore
+key.properties
+android/key.properties

@@ -1,4 +1,5 @@
 // lib/services/auth_service.dart
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -41,10 +42,10 @@ class AuthService {
 
       return credential;
     } on FirebaseAuthException catch (e) {
-      print('Erreur inscription: ${e.code} - ${e.message}');
+      debugPrint('Erreur inscription: ${e.code} - ${e.message}');
       throw _getAuthErrorMessage(e.code);
     } catch (e) {
-      print('Erreur inscription: $e');
+      debugPrint('Erreur inscription: $e');
       throw 'Une erreur est survenue lors de l\'inscription';
     }
   }
@@ -69,10 +70,10 @@ class AuthService {
 
       return credential;
     } on FirebaseAuthException catch (e) {
-      print('Erreur connexion: ${e.code} - ${e.message}');
+      debugPrint('Erreur connexion: ${e.code} - ${e.message}');
       throw _getAuthErrorMessage(e.code);
     } catch (e) {
-      print('Erreur connexion: $e');
+      debugPrint('Erreur connexion: $e');
       throw 'Une erreur est survenue lors de la connexion';
     }
   }
@@ -124,7 +125,7 @@ class AuthService {
 
       return userCredential;
     } catch (e) {
-      print('Erreur connexion Google: $e');
+      debugPrint('Erreur connexion Google: $e');
       throw 'Une erreur est survenue lors de la connexion avec Google';
     }
   }
@@ -137,7 +138,7 @@ class AuthService {
         _googleSignIn.signOut(),
       ]);
     } catch (e) {
-      print('Erreur déconnexion: $e');
+      debugPrint('Erreur déconnexion: $e');
       throw 'Une erreur est survenue lors de la déconnexion';
     }
   }
@@ -147,10 +148,10 @@ class AuthService {
     try {
       await _auth.sendPasswordResetEmail(email: email);
     } on FirebaseAuthException catch (e) {
-      print('Erreur reset password: ${e.code}');
+      debugPrint('Erreur reset password: ${e.code}');
       throw _getAuthErrorMessage(e.code);
     } catch (e) {
-      print('Erreur reset password: $e');
+      debugPrint('Erreur reset password: $e');
       throw 'Une erreur est survenue';
     }
   }
@@ -167,7 +168,7 @@ class AuthService {
         await user.delete();
       }
     } catch (e) {
-      print('Erreur suppression compte: $e');
+      debugPrint('Erreur suppression compte: $e');
       throw 'Une erreur est survenue lors de la suppression du compte';
     }
   }

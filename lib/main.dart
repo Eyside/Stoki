@@ -212,7 +212,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFE4B5).withOpacity(0.3),
+                color: const Color(0xFFFFE4B5).withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.group_rounded, color: Color(0xFFF59E0B)),
@@ -235,7 +235,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFC8E6C9).withOpacity(0.3),
+                color: const Color(0xFFC8E6C9).withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.eco_rounded, color: Color(0xFF4CAF50)),
@@ -256,7 +256,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFBBDEFB).withOpacity(0.3),
+                color: const Color(0xFFBBDEFB).withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.people_rounded, color: Color(0xFF2196F3)),
@@ -276,7 +276,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFCAB8FF).withOpacity(0.3),
+                color: const Color(0xFFCAB8FF).withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.analytics_rounded, color: Color(0xFF9C27B0)),

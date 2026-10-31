@@ -227,7 +227,7 @@ class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBBF24).withOpacity(0.1),
+        color: const Color(0xFFFBBF24).withValues(alpha: 0.1),
         border: Border(
           bottom: BorderSide(color: Colors.grey.shade200),
         ),
@@ -292,7 +292,7 @@ class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
               leading: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: info.color.withOpacity(0.1),
+                  color: info.color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(info.emoji, style: const TextStyle(fontSize: 24)),
@@ -417,9 +417,9 @@ class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: sourceColor.withOpacity(0.1),
+                      color: sourceColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: sourceColor.withOpacity(0.3)),
+                      border: Border.all(color: sourceColor.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       '$sourceName: ${entry.value.toStringAsFixed(0)}g',
@@ -730,7 +730,7 @@ class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -4),
           ),
@@ -922,7 +922,7 @@ class _ShoppingListV2ScreenState extends ConsumerState<ShoppingListV2Screen> {
 
         addedCount++;
       } catch (e) {
-        print('❌ Erreur ajout au stock: $e');
+        debugPrint('❌ Erreur ajout au stock: $e');
         errorCount++;
       }
     }

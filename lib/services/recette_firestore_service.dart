@@ -1,4 +1,5 @@
 // lib/services/recette_firestore_service.dart
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/recette_firestore.dart';
 import '../utils/unit_converter.dart';
@@ -71,7 +72,7 @@ class RecetteFirestoreService {
     // Recalculer la nutrition totale
     await _updateRecetteNutrition(recetteId);
 
-    print('✅ Ingrédient ajouté à la recette $recetteId');
+    debugPrint('✅ Ingrédient ajouté à la recette $recetteId');
   }
 
   // ============================================================================
@@ -92,7 +93,7 @@ class RecetteFirestoreService {
     // Recalculer la nutrition
     await _updateRecetteNutrition(recetteId);
 
-    print('✅ Ingrédient supprimé de la recette $recetteId');
+    debugPrint('✅ Ingrédient supprimé de la recette $recetteId');
   }
 
   // ============================================================================
@@ -242,7 +243,7 @@ class RecetteFirestoreService {
 
     await _firestore.collection('recettes').doc(recetteId).update(updates);
 
-    print('✅ Recette mise à jour: $recetteId');
+    debugPrint('✅ Recette mise à jour: $recetteId');
   }
 
   // ============================================================================
@@ -259,7 +260,7 @@ class RecetteFirestoreService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    print('✅ Recette partagée avec le groupe $groupId');
+    debugPrint('✅ Recette partagée avec le groupe $groupId');
   }
 
   // Arrêter de partager avec un groupe
@@ -272,7 +273,7 @@ class RecetteFirestoreService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    print('✅ Partage annulé avec le groupe $groupId');
+    debugPrint('✅ Partage annulé avec le groupe $groupId');
   }
 
   // ============================================================================
@@ -294,7 +295,7 @@ class RecetteFirestoreService {
     // Supprimer la recette
     await _firestore.collection('recettes').doc(recetteId).delete();
 
-    print('✅ Recette supprimée: $recetteId');
+    debugPrint('✅ Recette supprimée: $recetteId');
   }
 
   // ============================================================================
@@ -331,7 +332,7 @@ class RecetteFirestoreService {
       await addIngredient(recetteId: newRecetteId, ingredient: ingredient);
     }
 
-    print('✅ Recette dupliquée: $newRecetteId');
+    debugPrint('✅ Recette dupliquée: $newRecetteId');
     return newRecetteId;
   }
 

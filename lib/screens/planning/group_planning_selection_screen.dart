@@ -186,7 +186,7 @@ class _GroupPlanningSelectionScreenState extends State<GroupPlanningSelectionScr
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -199,7 +199,7 @@ class _GroupPlanningSelectionScreenState extends State<GroupPlanningSelectionScr
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Icon(icon, size: 32, color: const Color(0xFF1E293B)),
@@ -222,7 +222,7 @@ class _GroupPlanningSelectionScreenState extends State<GroupPlanningSelectionScr
                         subtitle,
                         style: TextStyle(
                           fontSize: 13,
-                          color: const Color(0xFF1E293B).withOpacity(0.7),
+                          color: const Color(0xFF1E293B).withValues(alpha: 0.7),
                         ),
                       ),
                     ],
@@ -231,7 +231,7 @@ class _GroupPlanningSelectionScreenState extends State<GroupPlanningSelectionScr
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.3),
+                    color: Colors.white.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
@@ -305,7 +305,7 @@ class _GroupPlanningSelectionScreenState extends State<GroupPlanningSelectionScr
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -321,7 +321,7 @@ class _GroupPlanningSelectionScreenState extends State<GroupPlanningSelectionScr
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: const Icon(
@@ -348,7 +348,7 @@ class _GroupPlanningSelectionScreenState extends State<GroupPlanningSelectionScr
                                 '$memberCount membre${memberCount > 1 ? 's' : ''}',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: const Color(0xFF1E293B).withOpacity(0.7),
+                                  color: const Color(0xFF1E293B).withValues(alpha: 0.7),
                                 ),
                               ),
                             ],
@@ -357,7 +357,7 @@ class _GroupPlanningSelectionScreenState extends State<GroupPlanningSelectionScr
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.3),
+                            color: Colors.white.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
@@ -373,7 +373,7 @@ class _GroupPlanningSelectionScreenState extends State<GroupPlanningSelectionScr
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(

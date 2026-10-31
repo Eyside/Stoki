@@ -472,7 +472,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
               leading: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: info.color.withOpacity(0.1),
+                  color: info.color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(info.emoji, style: const TextStyle(fontSize: 24)),
@@ -733,7 +733,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
           final cloudItems = await _cloudService.getAllMyLists().first;
           allItems.addAll(cloudItems);
         } catch (e) {
-          print('⚠️ Erreur chargement cloud: $e');
+          debugPrint('⚠️ Erreur chargement cloud: $e');
         }
       }
     }
@@ -1143,7 +1143,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
           await _cloudService.deleteItem(item.id);
         }
       } catch (e) {
-        print('❌ Erreur ajout au frigo: $e');
+        debugPrint('❌ Erreur ajout au frigo: $e');
         skippedCount++;
       }
     }

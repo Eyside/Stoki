@@ -1,6 +1,7 @@
 // lib/services/openfoodfacts_service.dart
 // VERSION ÉTENDUE avec toutes les valeurs nutritionnelles
 
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -103,7 +104,7 @@ class OpenFoodFactsService {
         category: category,
       );
     } catch (e) {
-      print('❌ Erreur OpenFoodFacts: $e');
+      debugPrint('❌ Erreur OpenFoodFacts: $e');
       return null;
     }
   }

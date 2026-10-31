@@ -2,6 +2,7 @@
 // Ce repository est maintenant un simple wrapper du service cloud
 // Il est conservé pour la compatibilité mais toutes les opérations passent par le cloud
 
+import 'package:flutter/foundation.dart';
 import '../services/frigo_firestore_service.dart';
 import '../services/auth_service.dart';
 import '../models/frigo_firestore.dart';
@@ -93,7 +94,7 @@ class FrigoRepository {
         };
       }).toList();
     } catch (e) {
-      print('❌ Erreur récupération stock cloud: $e');
+      debugPrint('❌ Erreur récupération stock cloud: $e');
       return [];
     }
   }

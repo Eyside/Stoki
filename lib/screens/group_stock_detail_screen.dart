@@ -203,7 +203,7 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
   Widget _buildSection(String title, List<FrigoFirestore> items, Color color) {
     return Column(
       children: [
-        Container(margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)), child: Row(children: [Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(8)), child: Text('${items.length}', style: const TextStyle(fontWeight: FontWeight.bold)))])),
+        Container(margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)), child: Row(children: [Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(8)), child: Text('${items.length}', style: const TextStyle(fontWeight: FontWeight.bold)))])),
         ...items.map((i) => _buildCard(i)),
       ],
     );
@@ -215,7 +215,7 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))]),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))]),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -226,7 +226,7 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
             child: Row(children: [
               Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: item.visibility == FrigoVisibility.private ? const Color(0xFFE0F2FE) : const Color(0xFFD1FAE5), borderRadius: BorderRadius.circular(12)), child: Icon(item.visibility == FrigoVisibility.private ? Icons.lock_outline : Icons.group_outlined, size: 24, color: item.visibility == FrigoVisibility.private ? const Color(0xFF0284C7) : const Color(0xFF059669))),
               const SizedBox(width: 16),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item.ingredientName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)), const SizedBox(height: 6), Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)), child: Text('${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1)} ${item.unit}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))), if (item.bestBefore != null) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withOpacity(0.3))), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.calendar_today, size: 12, color: color), const SizedBox(width: 4), Text(days! < 0 ? 'Périmé' : days == 0 ? 'Aujourd\'hui' : '$days j', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color))]))]])])),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item.ingredientName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)), const SizedBox(height: 6), Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)), child: Text('${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1)} ${item.unit}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))), if (item.bestBefore != null) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withValues(alpha: 0.3))), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.calendar_today, size: 12, color: color), const SizedBox(width: 4), Text(days! < 0 ? 'Périmé' : days == 0 ? 'Aujourd\'hui' : '$days j', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color))]))]])])),
               IconButton(icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)), onPressed: () => _delete(item)),
             ]),
           ),
