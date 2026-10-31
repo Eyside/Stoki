@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,10 +7,16 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+
 layout.buildDirectory.set(File(rootProject.projectDir.parentFile, "build/app"))
 
 android {
-    namespace = "com.example.stoki"
+    namespace = "com.tintinos.stoki"
     compileSdk = 36
     ndkVersion = "27.1.12297006"
 
@@ -22,12 +30,23 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.stoki"
+        applicationId = "com.tintinos.stoki"
         minSdk = 24  // Firebase nécessite minimum 21, mais 24+ recommandé
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
         multiDexEnabled = true
+    }
+
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
     }
 
     buildTypes {
@@ -35,7 +54,11 @@ android {
             // Configuration debug par défaut
         }
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            // Clé de publication si android/key.properties existe, sinon clé debug
+            signingConfig = if (keystorePropertiesFile.exists())
+                signingConfigs.getByName("release")
+            else
+                signingConfigs.getByName("debug")
         }
     }
 }
