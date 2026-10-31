@@ -126,6 +126,7 @@ class _ScanForShoppingScreenState extends ConsumerState<ScanForShoppingScreen> {
           context, ingredientService, _product!);
     }
 
+    if (!mounted) return;
     if (_ingredient == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

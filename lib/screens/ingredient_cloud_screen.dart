@@ -237,6 +237,7 @@ class _IngredientCloudScreenState extends ConsumerState<IngredientCloudScreen> {
     );
 
     if (ok == true) {
+      if (!mounted) return;
       final name = nameCtrl.text.trim();
       final category = categoryCtrl.text.trim();
       final barcode = barcodeCtrl.text.trim();

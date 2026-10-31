@@ -129,7 +129,7 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
     }
 
     final product = await Navigator.push<OpenFoodFactsProduct>(context, MaterialPageRoute(builder: (_) => _BarcodeScannerScreen()));
-    if (product == null) return;
+    if (product == null || !mounted) return;
 
     if (product.kcal100g == 0) {
       final add = await showDialog<bool>(
@@ -182,7 +182,7 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
       ),
     );
 
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
     final qty = double.tryParse(qCtrl.text.trim()) ?? 0;
     if (qty <= 0) return;
 
@@ -249,8 +249,12 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
 
   Map<String, List<FrigoFirestore>> _groupByLocation(List<FrigoFirestore> items) {
     final m = <String, List<FrigoFirestore>>{};
-    for (final i in items) (m[i.location] ??= []).add(i);
-    for (final l in m.values) l.sort((a, b) => a.bestBefore == null ? 1 : b.bestBefore == null ? -1 : a.bestBefore!.compareTo(b.bestBefore!));
+    for (final i in items) {
+      (m[i.location] ??= []).add(i);
+    }
+    for (final l in m.values) {
+      l.sort((a, b) => a.bestBefore == null ? 1 : b.bestBefore == null ? -1 : a.bestBefore!.compareTo(b.bestBefore!));
+    }
     return m;
   }
 
@@ -276,7 +280,7 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
 
     final ok = await showDialog<bool>(context: context, builder: (c) => StatefulBuilder(builder: (_, setState) => AlertDialog(title: const Text('Ajouter'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: nCtrl, decoration: const InputDecoration(labelText: 'Nom *', border: OutlineInputBorder()), autofocus: true), const SizedBox(height: 12), Row(children: [Expanded(flex: 2, child: TextField(controller: qCtrl, decoration: const InputDecoration(labelText: 'Qté *', border: OutlineInputBorder()), keyboardType: const TextInputType.numberWithOptions(decimal: true))), const SizedBox(width: 8), Expanded(child: DropdownButtonFormField<String>(initialValue: unit, decoration: const InputDecoration(labelText: 'Unité', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'g', child: Text('g')), DropdownMenuItem(value: 'kg', child: Text('kg')), DropdownMenuItem(value: 'ml', child: Text('ml')), DropdownMenuItem(value: 'L', child: Text('L')), DropdownMenuItem(value: 'unité', child: Text('unité'))], onChanged: (v) => setState(() => unit = v!)))]), const SizedBox(height: 12), DropdownButtonFormField<String>(initialValue: loc, decoration: const InputDecoration(labelText: 'Emplacement', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'frigo', child: Text('🧊 Frigo')), DropdownMenuItem(value: 'placard', child: Text('📦 Placard')), DropdownMenuItem(value: 'congélateur', child: Text('❄️ Congélateur'))], onChanged: (v) => setState(() => loc = v!)), const SizedBox(height: 12), OutlinedButton.icon(onPressed: () async {final p = await showDatePicker(context: c, initialDate: DateTime.now().add(const Duration(days: 7)), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 730)), locale: const Locale('fr')); if (p != null) setState(() => best = p);}, icon: const Icon(Icons.calendar_today), label: Text(best == null ? 'DLC (opt.)' : 'DLC: ${best!.day}/${best!.month}/${best!.year}')), if (best != null) TextButton.icon(onPressed: () => setState(() => best = null), icon: const Icon(Icons.close, size: 16), label: const Text('Retirer'), style: TextButton.styleFrom(foregroundColor: Colors.red)), const SizedBox(height: 12), TextField(controller: cCtrl, decoration: const InputDecoration(labelText: 'Calories (kcal/100g)', border: OutlineInputBorder(), hintText: '0'), keyboardType: const TextInputType.numberWithOptions(decimal: true))])), actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Annuler')), ElevatedButton(onPressed: () => Navigator.pop(c, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white), child: const Text('Ajouter'))])));
 
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
     final name = nCtrl.text.trim(), qty = double.tryParse(qCtrl.text.trim()) ?? 0, cal = double.tryParse(cCtrl.text.trim()) ?? 0;
     if (name.isEmpty || qty <= 0) {ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nom et quantité requis'), backgroundColor: Color(0xFFEF4444))); return;}
 
@@ -298,7 +302,7 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
 
     final ok = await showDialog<bool>(context: context, builder: (c) => StatefulBuilder(builder: (_, setState) => AlertDialog(title: Text('Modifier ${item.ingredientName}'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [Row(children: [Expanded(flex: 2, child: TextField(controller: qCtrl, decoration: const InputDecoration(labelText: 'Qté *', border: OutlineInputBorder()), keyboardType: const TextInputType.numberWithOptions(decimal: true))), const SizedBox(width: 8), Expanded(child: DropdownButtonFormField<String>(initialValue: unit, decoration: const InputDecoration(labelText: 'Unité', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'g', child: Text('g')), DropdownMenuItem(value: 'kg', child: Text('kg')), DropdownMenuItem(value: 'ml', child: Text('ml')), DropdownMenuItem(value: 'L', child: Text('L')), DropdownMenuItem(value: 'unité', child: Text('unité'))], onChanged: (v) => setState(() => unit = v!)))]), const SizedBox(height: 12), DropdownButtonFormField<String>(initialValue: loc, decoration: const InputDecoration(labelText: 'Emplacement', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'frigo', child: Text('🧊 Frigo')), DropdownMenuItem(value: 'placard', child: Text('📦 Placard')), DropdownMenuItem(value: 'congélateur', child: Text('❄️ Congélateur'))], onChanged: (v) => setState(() => loc = v!)), const SizedBox(height: 12), OutlinedButton.icon(onPressed: () async {final p = await showDatePicker(context: c, initialDate: best ?? DateTime.now().add(const Duration(days: 7)), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 730)), locale: const Locale('fr')); if (p != null) setState(() => best = p);}, icon: const Icon(Icons.calendar_today), label: Text(best == null ? 'DLC (opt.)' : 'DLC: ${best!.day}/${best!.month}/${best!.year}')), if (best != null) TextButton.icon(onPressed: () => setState(() => best = null), icon: const Icon(Icons.close, size: 16), label: const Text('Retirer'), style: TextButton.styleFrom(foregroundColor: Colors.red))])), actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Annuler')), ElevatedButton(onPressed: () => Navigator.pop(c, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white), child: const Text('Enregistrer'))])));
 
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
     final qty = double.tryParse(qCtrl.text.trim()) ?? 0;
     if (qty <= 0) {ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quantité invalide'), backgroundColor: Color(0xFFEF4444))); return;}
 
@@ -435,7 +439,7 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
 
   Future<void> _delete(FrigoFirestore item) async {
     final ok = await showDialog<bool>(context: context, builder: (c) => AlertDialog(title: const Text('Supprimer ?'), content: Text('Supprimer "${item.ingredientName}" du stock ?'), actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Non')), ElevatedButton(onPressed: () => Navigator.pop(c, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white), child: const Text('Oui'))]));
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
 
     try {
       await _frigoService.deleteFrigoItem(item.id);

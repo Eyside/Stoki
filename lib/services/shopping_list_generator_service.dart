@@ -2,7 +2,6 @@
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import '../database.dart';
-import '../models/shopping_list_firestore.dart';
 import '../models/planning_firestore.dart';
 import '../models/recette_firestore.dart';
 import '../models/frigo_firestore.dart'; // ✅ AJOUTÉ

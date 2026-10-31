@@ -189,6 +189,7 @@ class _RecetteFirestoreFormState extends ConsumerState<RecetteFirestoreForm> {
           avgWeightPerUnitG: ingredient.avgWeightPerUnitG,
         );
 
+        if (!mounted) return;
         setState(() {
           _pendingIngredients.add(recetteIngredient);
         });
