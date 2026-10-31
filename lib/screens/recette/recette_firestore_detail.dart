@@ -138,6 +138,7 @@ class _RecetteFirestoreDetailState extends ConsumerState<RecetteFirestoreDetail>
           IconButton(
             icon: const Icon(Icons.delete),
             onPressed: () async {
+              final navigator = Navigator.of(context);
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (c) => AlertDialog(
@@ -158,7 +159,6 @@ class _RecetteFirestoreDetailState extends ConsumerState<RecetteFirestoreDetail>
               );
 
               if (confirm == true) {
-                final navigator = Navigator.of(context);
                 await _recetteService.deleteRecette(widget.recetteId);
                 navigator.pop();
               }

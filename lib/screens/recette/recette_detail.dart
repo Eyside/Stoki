@@ -520,6 +520,7 @@ class _RecetteDetailScreenState extends State<RecetteDetailScreen> {
           IconButton(
             icon: const Icon(Icons.delete),
             onPressed: () async {
+              final navigator = Navigator.of(context);
               final should = await showDialog<bool>(
                 context: context,
                 builder: (c) => AlertDialog(
@@ -539,7 +540,6 @@ class _RecetteDetailScreenState extends State<RecetteDetailScreen> {
                 ),
               );
               if (should == true) {
-                final navigator = Navigator.of(context);
                 await widget.recetteRepository.deleteRecette(_currentRecette.id);
                 navigator.pop();
               }
