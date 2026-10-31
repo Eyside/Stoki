@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import '../../models/ingredient_firestore.dart';
 import '../../providers.dart';
 import '../../services/openfoodfacts_service.dart';
 import '../../utils/permission_helper.dart';
+import '../../widgets/ingredient_match_dialog.dart';
 
 class ScanScreen extends ConsumerStatefulWidget {
   const ScanScreen({super.key});
@@ -90,35 +90,12 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     try {
       final service = ref.read(ingredientFirestoreServiceProvider);
 
-      final existing = await service.findByBarcode(product.barcode);
-      if (existing != null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('« ${existing.name} » est déjà dans vos ingrédients')),
-        );
-        Navigator.of(context).pop(true);
-        return;
-      }
-
-      await service.addIngredient(
-        name: product.name,
-        caloriesPer100g: product.kcal100g,
-        proteinsPer100g: product.proteins100g,
-        fatsPer100g: product.fats100g,
-        carbsPer100g: product.carbs100g,
-        fibersPer100g: product.fibers100g,
-        saltPer100g: product.salt100g,
-        barcode: product.barcode,
-        category: product.category,
-        nutriscore: product.nutriscore,
-        imageUrl: product.imageUrl,
-        brand: product.brand,
-        visibility: IngredientVisibility.private,
-      );
+      final ingredient =
+          await IngredientMatchDialog.resolveScanned(context, service, product);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('« ${product.name} » ajouté à vos ingrédients')),
+        SnackBar(content: Text('« ${ingredient.name} » ajouté à vos ingrédients')),
       );
       Navigator.of(context).pop(true);
     } catch (e) {

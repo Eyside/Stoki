@@ -681,7 +681,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
           fibersPer100g: null,
           densityGPerMl: null,
           avgWeightPerUnitG: null,
-          createdAt: item.createdAt ?? DateTime.now(),
+          createdAt: item.createdAt,
           updatedAt: DateTime.now(),
         ));
       }
@@ -718,7 +718,7 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
           fibersPer100g: null,
           densityGPerMl: null,
           avgWeightPerUnitG: null,
-          createdAt: item.createdAt ?? DateTime.now(),
+          createdAt: item.createdAt,
           updatedAt: DateTime.now(),
         ));
       }

@@ -71,6 +71,11 @@ service cloud.firestore {
       match /calorie_tracking/{entryId} {
         allow read, write: if isUser(userId);
       }
+
+      // Mes codes-barres reliés à un ingrédient : visibles par moi seul
+      match /barcode_links/{code} {
+        allow read, write: if isUser(userId);
+      }
     }
 
     // ------------------------------------------------------------------------

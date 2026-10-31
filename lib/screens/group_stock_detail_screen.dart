@@ -11,6 +11,7 @@ import '../services/ingredient_firestore_service.dart';
 import '../models/frigo_firestore.dart';
 import '../models/ingredient_firestore.dart';
 import '../utils/permission_helper.dart';
+import '../widgets/ingredient_match_dialog.dart';
 
 enum StockType { private, group }
 
@@ -186,12 +187,12 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
     if (qty <= 0) return;
 
     try {
-      final existing = await _ingredientService.findByBarcode(product.barcode);
-      final ingId = existing?.id ?? await _ingredientService.addIngredient(name: product.name, caloriesPer100g: product.kcal100g, proteinsPer100g: product.proteins100g, fatsPer100g: product.fats100g, carbsPer100g: product.carbs100g, fibersPer100g: product.fibers100g, barcode: product.barcode, brand: product.brand, nutriscore: product.nutriscore, imageUrl: product.imageUrl, visibility: IngredientVisibility.private);
+      final ingredient = await IngredientMatchDialog.resolveScanned(context, _ingredientService, product);
+      final ingId = ingredient.id;
 
-      await _frigoService.addToFrigo(ingredientId: ingId, ingredientName: product.name, quantity: qty, unit: unit, location: location, bestBefore: bestBefore, visibility: widget.stockType == StockType.group ? FrigoVisibility.group : FrigoVisibility.private, groupId: widget.stockType == StockType.group ? widget.groupId : null, caloriesPer100g: product.kcal100g, proteinsPer100g: product.proteins100g, fatsPer100g: product.fats100g, carbsPer100g: product.carbs100g, fibersPer100g: product.fibers100g);
+      await _frigoService.addToFrigo(ingredientId: ingId, ingredientName: ingredient.name, quantity: qty, unit: unit, location: location, bestBefore: bestBefore, visibility: widget.stockType == StockType.group ? FrigoVisibility.group : FrigoVisibility.private, groupId: widget.stockType == StockType.group ? widget.groupId : null, caloriesPer100g: product.kcal100g, proteinsPer100g: product.proteins100g, fatsPer100g: product.fats100g, carbsPer100g: product.carbs100g, fibersPer100g: product.fibers100g);
 
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${product.name} ajouté !"), backgroundColor: const Color(0xFF10B981)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ingredient.name} ajouté !"), backgroundColor: const Color(0xFF10B981)));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: const Color(0xFFEF4444)));
     }
@@ -280,9 +281,11 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
     if (name.isEmpty || qty <= 0) {ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nom et quantité requis'), backgroundColor: Color(0xFFEF4444))); return;}
 
     try {
-      final ingId = await _ingredientService.addIngredient(name: name, caloriesPer100g: cal, visibility: IngredientVisibility.private);
-      await _frigoService.addToFrigo(ingredientId: ingId, ingredientName: name, quantity: qty, unit: unit, location: loc, bestBefore: best, visibility: widget.stockType == StockType.group ? FrigoVisibility.group : FrigoVisibility.private, groupId: widget.stockType == StockType.group ? widget.groupId : null, caloriesPer100g: cal);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$name ajouté !'), backgroundColor: const Color(0xFF10B981)));
+      final similar = await IngredientMatchDialog.checkManualName(context, _ingredientService, name);
+      final ingId = similar?.id ?? await _ingredientService.addIngredient(name: name, caloriesPer100g: cal, visibility: IngredientVisibility.private);
+      final stockName = similar?.name ?? name;
+      await _frigoService.addToFrigo(ingredientId: ingId, ingredientName: stockName, quantity: qty, unit: unit, location: loc, bestBefore: best, visibility: widget.stockType == StockType.group ? FrigoVisibility.group : FrigoVisibility.private, groupId: widget.stockType == StockType.group ? widget.groupId : null, caloriesPer100g: cal);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$stockName ajouté !'), backgroundColor: const Color(0xFF10B981)));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: const Color(0xFFEF4444)));
     }

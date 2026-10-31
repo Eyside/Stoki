@@ -1,6 +1,7 @@
 // lib/services/shopping_list_generator_service.dart (CORRIGÉ)
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
+import '../database.dart';
 import '../models/shopping_list_firestore.dart';
 import '../models/planning_firestore.dart';
 import '../models/recette_firestore.dart';
@@ -273,7 +274,6 @@ class ShoppingListGeneratorService {
       Map<String, dynamic> planningData,
       Map<String, IngredientNeed> neededIngredients,
       ) async {
-    final planning = planningData['planning'] as MealPlanningData;
     final recette = planningData['recette'] as Recette;
     final servings = planningData['servings'] as int;
 

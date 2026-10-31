@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ingredient_firestore.dart';
 import '../providers.dart';
+import '../widgets/ingredient_match_dialog.dart';
 import 'scan/scan_screen.dart';
 
 class IngredientCloudScreen extends ConsumerStatefulWidget {
@@ -248,6 +249,19 @@ class _IngredientCloudScreenState extends ConsumerState<IngredientCloudScreen> {
       if (name.isNotEmpty) {
         try {
           final service = ref.read(ingredientFirestoreServiceProvider);
+          final similar =
+              await IngredientMatchDialog.checkManualName(context, service, name);
+          if (similar != null) {
+            if (barcode.isNotEmpty) {
+              await service.linkBarcode(barcode, similar.id);
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("« ${similar.name} » existe déjà : aucun doublon créé")),
+              );
+            }
+            return;
+          }
           await service.addIngredient(
             name: name,
             caloriesPer100g: calories,

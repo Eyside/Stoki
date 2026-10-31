@@ -7,6 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../providers.dart';
 import '../../services/openfoodfacts_service.dart';
+import '../../widgets/ingredient_match_dialog.dart';
 import '../../models/ingredient_firestore.dart';
 import '../../utils/permission_helper.dart';
 
@@ -121,23 +122,8 @@ class _ScanForShoppingScreenState extends ConsumerState<ScanForShoppingScreen> {
     // Si le produit n'existe pas encore dans la base cloud, le créer
     if (_ingredient == null && _product != null) {
       final ingredientService = ref.read(ingredientFirestoreServiceProvider);
-      final id = await ingredientService.addIngredient(
-        name: _product!.name,
-        caloriesPer100g: _product!.kcal100g,
-        proteinsPer100g: _product!.proteins100g,
-        fatsPer100g: _product!.fats100g,
-        carbsPer100g: _product!.carbs100g,
-        fibersPer100g: _product!.fibers100g,
-        saltPer100g: _product!.salt100g,
-        barcode: _product!.barcode,
-        nutriscore: _product!.nutriscore,
-        imageUrl: _product!.imageUrl,
-        brand: _product!.brand,
-        category: _product!.category,
-        visibility: IngredientVisibility.private,
-      );
-
-      _ingredient = await ingredientService.getById(id);
+      _ingredient = await IngredientMatchDialog.resolveScanned(
+          context, ingredientService, _product!);
     }
 
     if (_ingredient == null) {
