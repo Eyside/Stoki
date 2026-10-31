@@ -1,4 +1,5 @@
 // lib/providers.dart (VERSION MISE À JOUR POUR LE CLOUD)
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'database.dart';
 import 'repositories/ingredient_repository.dart';
@@ -132,7 +133,7 @@ final frigoProvider = FutureProvider((ref) async {
   try {
     return await repo.getAllFrigoWithIngredientsFromCloud();
   } catch (e) {
-    print('⚠️ frigoProvider deprecated utilisé - migrez vers frigoCloudProvider');
+    debugPrint('⚠️ frigoProvider deprecated utilisé - migrez vers frigoCloudProvider');
     return <Map<String, dynamic>>[];
   }
 });
@@ -171,7 +172,7 @@ final frigoCloudCompatProvider = FutureProvider<List<Map<String, dynamic>>>((ref
       };
     }).toList();
   } catch (e) {
-    print('❌ Erreur frigoCloudCompatProvider: $e');
+    debugPrint('❌ Erreur frigoCloudCompatProvider: $e');
     return [];
   }
 });

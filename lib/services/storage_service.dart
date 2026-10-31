@@ -1,4 +1,5 @@
 // lib/services/storage_service.dart
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 
@@ -19,7 +20,7 @@ class StorageService {
       final downloadUrl = await snapshot.ref.getDownloadURL();
       return downloadUrl;
     } catch (e) {
-      print('Erreur upload image: $e');
+      debugPrint('Erreur upload image: $e');
       return null;
     }
   }
@@ -31,7 +32,7 @@ class StorageService {
       await ref.delete();
       return true;
     } catch (e) {
-      print('Erreur suppression image: $e');
+      debugPrint('Erreur suppression image: $e');
       return false;
     }
   }
@@ -50,7 +51,7 @@ class StorageService {
       final downloadUrl = await snapshot.ref.getDownloadURL();
       return downloadUrl;
     } catch (e) {
-      print('Erreur upload photo profil: $e');
+      debugPrint('Erreur upload photo profil: $e');
       return null;
     }
   }

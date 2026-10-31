@@ -2,6 +2,7 @@
 // Service de génération de liste avec répartition intelligente par source
 // VERSION CLOUD: Utilise IngredientFirestore au lieu d'Ingredient local
 
+import 'package:flutter/foundation.dart';
 import '../models/frigo_firestore.dart';
 import '../models/recette_firestore.dart';
 import '../services/planning_firestore_service.dart';
@@ -98,10 +99,10 @@ class ShoppingListV2GeneratorService {
     required DateTime endDate,
     required bool subtractStock,
   }) async {
-    print('🔄 Génération liste intelligente...');
-    print('   Sources: ${sources.join(", ")}');
-    print('   Période: ${startDate.day}/${startDate.month} → ${endDate.day}/${endDate.month}');
-    print('   Soustraire stock: $subtractStock');
+    debugPrint('🔄 Génération liste intelligente...');
+    debugPrint('   Sources: ${sources.join(", ")}');
+    debugPrint('   Période: ${startDate.day}/${startDate.month} → ${endDate.day}/${endDate.month}');
+    debugPrint('   Soustraire stock: $subtractStock');
 
     // Map: ingredientId -> Map<sourceId, quantityGrams>
     final needsByIngredient = <String, Map<String, double>>{};
@@ -109,7 +110,7 @@ class ShoppingListV2GeneratorService {
 
     // 1. Parcourir chaque source
     for (final sourceId in sources) {
-      print('\n📋 Traitement source: $sourceId');
+      debugPrint('\n📋 Traitement source: $sourceId');
 
       final plannings = await (sourceId == 'private'
           ? planningService.getPlanningForDateRange(startDate, endDate).first
@@ -122,14 +123,14 @@ class ShoppingListV2GeneratorService {
             p.date.isBefore(endDate.add(const Duration(days: 1)));
       }).toList();
 
-      print('   → ${filteredPlannings.length} planning(s) trouvé(s)');
+      debugPrint('   → ${filteredPlannings.length} planning(s) trouvé(s)');
 
       // 2. Pour chaque planning, récupérer les ingrédients
       for (final planning in filteredPlannings) {
         try {
           final recetteDoc = await recetteService.getRecetteById(planning.recetteId);
           if (recetteDoc == null) {
-            print('   ⚠️ Recette ${planning.recetteId} introuvable');
+            debugPrint('   ⚠️ Recette ${planning.recetteId} introuvable');
             continue;
           }
 
@@ -171,12 +172,12 @@ class ShoppingListV2GeneratorService {
             }
           }
         } catch (e) {
-          print('   ❌ Erreur traitement planning ${planning.id}: $e');
+          debugPrint('   ❌ Erreur traitement planning ${planning.id}: $e');
         }
       }
     }
 
-    print('\n✅ ${needsByIngredient.length} ingrédients uniques trouvés');
+    debugPrint('\n✅ ${needsByIngredient.length} ingrédients uniques trouvés');
 
     // 3. Soustraire le stock si demandé
     if (subtractStock) {
@@ -243,7 +244,7 @@ class ShoppingListV2GeneratorService {
           );
         }
       } catch (e) {
-        print('⚠️ Impossible de récupérer la catégorie pour ${items[i].ingredientName}');
+        debugPrint('⚠️ Impossible de récupérer la catégorie pour ${items[i].ingredientName}');
       }
     }
 
@@ -254,7 +255,7 @@ class ShoppingListV2GeneratorService {
       return a.ingredientName.compareTo(b.ingredientName);
     });
 
-    print('✅ ${items.length} articles dans la liste finale');
+    debugPrint('✅ ${items.length} articles dans la liste finale');
     return items;
   }
 
@@ -263,7 +264,7 @@ class ShoppingListV2GeneratorService {
       Map<String, Map<String, double>> needsByIngredient,
       List<String> sources,
       ) async {
-    print('\n🔄 Soustraction du stock...');
+    debugPrint('\n🔄 Soustraction du stock...');
 
     // Stock privé + stock de chaque groupe demandé (tous les membres)
     final allStock = <FrigoFirestore>[];
@@ -274,7 +275,7 @@ class ShoppingListV2GeneratorService {
     for (final sourceId in sources.where((s) => s != 'private')) {
       allStock.addAll(await frigoService.getGroupStock(sourceId).first);
     }
-    print('   → ${allStock.length} article(s) en stock');
+    debugPrint('   → ${allStock.length} article(s) en stock');
 
     for (final stockItem in allStock) {
       final ingredientId = stockItem.ingredientId;
@@ -304,7 +305,7 @@ class ShoppingListV2GeneratorService {
         final after = afterValue < 0 ? 0.0 : afterValue;
         needsByIngredient[ingredientId]![stockSource] = after;
 
-        print('   ✅ ${stockItem.ingredientName} ($stockSource): ${before.toStringAsFixed(0)}g → ${after.toStringAsFixed(0)}g');
+        debugPrint('   ✅ ${stockItem.ingredientName} ($stockSource): ${before.toStringAsFixed(0)}g → ${after.toStringAsFixed(0)}g');
       }
     }
 
@@ -314,6 +315,6 @@ class ShoppingListV2GeneratorService {
       return sources.isEmpty;
     });
 
-    print('   ✅ Soustraction terminée');
+    debugPrint('   ✅ Soustraction terminée');
   }
 }

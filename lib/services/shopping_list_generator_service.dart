@@ -1,4 +1,5 @@
 // lib/services/shopping_list_generator_service.dart (CORRIGÉ)
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import '../database.dart';
 import '../models/shopping_list_firestore.dart';
@@ -55,10 +56,10 @@ class ShoppingListGeneratorService {
     bool subtractStock = true,
     bool runDiagnostic = false,
   }) async {
-    print('🔄 Génération liste de courses...');
-    print('   Source: ${source.name}');
-    print('   Période: ${startDate.day}/${startDate.month} → ${endDate.day}/${endDate.month}');
-    print('   Soustraire stock: $subtractStock');
+    debugPrint('🔄 Génération liste de courses...');
+    debugPrint('   Source: ${source.name}');
+    debugPrint('   Période: ${startDate.day}/${startDate.month} → ${endDate.day}/${endDate.month}');
+    debugPrint('   Soustraire stock: $subtractStock');
 
     if (runDiagnostic) {
       await diagnosePlanningIssues(startDate: startDate, endDate: endDate);
@@ -73,15 +74,15 @@ class ShoppingListGeneratorService {
     );
 
     if (allPlannings.isEmpty) {
-      print('⚠️ Aucun repas planifié sur cette période');
+      debugPrint('⚠️ Aucun repas planifié sur cette période');
       return [];
     }
 
-    print('✅ ${allPlannings.length} repas trouvés');
+    debugPrint('✅ ${allPlannings.length} repas trouvés');
 
     // 2. Calculer les ingrédients nécessaires
     final neededIngredients = await _calculateNeededIngredients(allPlannings);
-    print('✅ ${neededIngredients.length} ingrédients nécessaires');
+    debugPrint('✅ ${neededIngredients.length} ingrédients nécessaires');
 
     // 3. Soustraire le stock si demandé - AVEC SOURCE ET GROUPID
     if (subtractStock) {
@@ -90,7 +91,7 @@ class ShoppingListGeneratorService {
         source: source,
         groupId: groupId,
       );
-      print('✅ Stock soustrait');
+      debugPrint('✅ Stock soustrait');
     }
 
     // 4. Retourner les ingrédients
@@ -148,7 +149,7 @@ class ShoppingListGeneratorService {
       return catA.compareTo(catB);
     });
 
-    print('✅ ${items.length} articles générés');
+    debugPrint('✅ ${items.length} articles générés');
     return items;
   }
 
@@ -242,7 +243,7 @@ class ShoppingListGeneratorService {
         });
       }
     } catch (e) {
-      print('⚠️ Erreur récupération planning cloud: $e');
+      debugPrint('⚠️ Erreur récupération planning cloud: $e');
     }
 
     return plannings;
@@ -324,7 +325,7 @@ class ShoppingListGeneratorService {
           final eatersList = jsonDecode(planning.eaters!);
           servings = eatersList.length.toDouble();
         } catch (e) {
-          print('⚠️ Impossible de parser eaters: ${planning.eaters}');
+          debugPrint('⚠️ Impossible de parser eaters: ${planning.eaters}');
         }
       }
 
@@ -347,8 +348,8 @@ class ShoppingListGeneratorService {
         }
       }
     } catch (e, stackTrace) {
-      print('❌ Erreur processCloudPlanning: $e');
-      print('Stack: $stackTrace');
+      debugPrint('❌ Erreur processCloudPlanning: $e');
+      debugPrint('Stack: $stackTrace');
     }
   }
 
@@ -361,16 +362,16 @@ class ShoppingListGeneratorService {
         ShoppingListSource? source,
         String? groupId,
       }) async {
-    print('🔄 Soustraction du stock...');
-    print('   Source: ${source?.name ?? "all"}');
-    print('   GroupId: $groupId');
+    debugPrint('🔄 Soustraction du stock...');
+    debugPrint('   Source: ${source?.name ?? "all"}');
+    debugPrint('   GroupId: $groupId');
 
     int subtractedCount = 0;
     final stockItems = <Map<String, dynamic>>[];
 
     // 1. Récupérer le stock local
     final localFrigoItems = await frigoRepo.getAllFrigoWithIngredients();
-    print('   → ${localFrigoItems.length} article(s) en stock local');
+    debugPrint('   → ${localFrigoItems.length} article(s) en stock local');
 
     for (final item in localFrigoItems) {
       final frigo = item['frigo'] as FrigoData;
@@ -396,7 +397,7 @@ class ShoppingListGeneratorService {
           source == ShoppingListSource.group) {
 
         final cloudStocks = await frigoCloudService.getMyStock().first;
-        print('   → ${cloudStocks.length} article(s) en stock cloud');
+        debugPrint('   → ${cloudStocks.length} article(s) en stock cloud');
 
         for (final cloudFrigo in cloudStocks) {
           // Filtrer selon la source
@@ -420,10 +421,10 @@ class ShoppingListGeneratorService {
         }
       }
     } catch (e) {
-      print('   ⚠️ Erreur récupération stock cloud: $e');
+      debugPrint('   ⚠️ Erreur récupération stock cloud: $e');
     }
 
-    print('   → ${stockItems.length} article(s) en stock total');
+    debugPrint('   → ${stockItems.length} article(s) en stock total');
 
     // 3. Soustraire chaque article du stock
     for (final stockItem in stockItems) {
@@ -455,7 +456,7 @@ class ShoppingListGeneratorService {
         neededIngredients[localKey]!.subtractStock(stockGrams);
         final afterQuantity = neededIngredients[localKey]!.quantityGrams;
 
-        print('   ✅ $ingredientName (local): ${beforeQuantity.toStringAsFixed(0)}g → ${afterQuantity.toStringAsFixed(0)}g (stock: ${stockGrams.toStringAsFixed(0)}g)');
+        debugPrint('   ✅ $ingredientName (local): ${beforeQuantity.toStringAsFixed(0)}g → ${afterQuantity.toStringAsFixed(0)}g (stock: ${stockGrams.toStringAsFixed(0)}g)');
         subtracted = true;
         subtractedCount++;
       }
@@ -466,13 +467,13 @@ class ShoppingListGeneratorService {
         neededIngredients[cloudKey]!.subtractStock(stockGrams);
         final afterQuantity = neededIngredients[cloudKey]!.quantityGrams;
 
-        print('   ✅ $ingredientName (cloud): ${beforeQuantity.toStringAsFixed(0)}g → ${afterQuantity.toStringAsFixed(0)}g (stock: ${stockGrams.toStringAsFixed(0)}g)');
+        debugPrint('   ✅ $ingredientName (cloud): ${beforeQuantity.toStringAsFixed(0)}g → ${afterQuantity.toStringAsFixed(0)}g (stock: ${stockGrams.toStringAsFixed(0)}g)');
         subtracted = true;
         subtractedCount++;
       }
 
       if (!subtracted) {
-        print('   ⚠️ $ingredientName: en stock ($type) mais pas dans la liste planifiée');
+        debugPrint('   ⚠️ $ingredientName: en stock ($type) mais pas dans la liste planifiée');
       }
     }
 
@@ -481,8 +482,8 @@ class ShoppingListGeneratorService {
     neededIngredients.removeWhere((key, value) => value.quantityGrams <= 0);
     final finalCount = neededIngredients.length;
 
-    print('   → $subtractedCount ingrédient(s) traité(s)');
-    print('   → ${removedCount - finalCount} ingrédient(s) supprimé(s) (stock suffisant)');
+    debugPrint('   → $subtractedCount ingrédient(s) traité(s)');
+    debugPrint('   → ${removedCount - finalCount} ingrédient(s) supprimé(s) (stock suffisant)');
   }
 
   // ============================================================================
@@ -493,51 +494,51 @@ class ShoppingListGeneratorService {
     required DateTime startDate,
     required DateTime endDate,
   }) async {
-    print('🔍 === DIAGNOSTIC DES PROBLÈMES DE PLANNING ===');
+    debugPrint('🔍 === DIAGNOSTIC DES PROBLÈMES DE PLANNING ===');
 
-    print('\n📱 PLANNINGS LOCAUX:');
+    debugPrint('\n📱 PLANNINGS LOCAUX:');
     final localPlannings = await _fetchLocalPlannings(startDate, endDate);
-    print('   → ${localPlannings.length} planning(s) local(aux)');
+    debugPrint('   → ${localPlannings.length} planning(s) local(aux)');
 
     for (final planning in localPlannings) {
       final p = planning['planning'] as MealPlanningData;
       final r = planning['recette'] as Recette;
-      print('   ✓ ${p.mealType}: ${r.name} (recetteId=${p.recetteId})');
+      debugPrint('   ✓ ${p.mealType}: ${r.name} (recetteId=${p.recetteId})');
 
       final ingredients = await recetteRepo.getIngredientsForRecette(r.id);
-      print('     → ${ingredients.length} ingrédient(s)');
+      debugPrint('     → ${ingredients.length} ingrédient(s)');
     }
 
-    print('\n☁️ PLANNINGS CLOUD:');
+    debugPrint('\n☁️ PLANNINGS CLOUD:');
     try {
       final cloudPlannings = await planningCloudService
           .getPlanningForDateRange(startDate, endDate)
           .first;
-      print('   → ${cloudPlannings.length} planning(s) cloud');
+      debugPrint('   → ${cloudPlannings.length} planning(s) cloud');
 
       for (final planning in cloudPlannings) {
-        print('   ✓ ${planning.mealType}: ${planning.recetteName} (recetteId=${planning.recetteId})');
+        debugPrint('   ✓ ${planning.mealType}: ${planning.recetteName} (recetteId=${planning.recetteId})');
 
         final recetteDoc = await recetteCloudService.getRecetteById(planning.recetteId);
 
         if (recetteDoc != null) {
-          print('     ✅ Recette existe dans Firestore');
+          debugPrint('     ✅ Recette existe dans Firestore');
 
           final ingredients = await recetteCloudService.getIngredients(planning.recetteId);
-          print('     → ${ingredients.length} ingrédient(s) dans Firestore');
+          debugPrint('     → ${ingredients.length} ingrédient(s) dans Firestore');
 
           if (ingredients.isEmpty) {
-            print('     ⚠️ PROBLÈME: Aucun ingrédient dans la sous-collection "ingredients"!');
+            debugPrint('     ⚠️ PROBLÈME: Aucun ingrédient dans la sous-collection "ingredients"!');
           }
         } else {
-          print('     ❌ PROBLÈME: Recette ${planning.recetteId} n\'existe PAS dans Firestore!');
+          debugPrint('     ❌ PROBLÈME: Recette ${planning.recetteId} n\'existe PAS dans Firestore!');
         }
       }
     } catch (e) {
-      print('   ❌ Erreur: $e');
+      debugPrint('   ❌ Erreur: $e');
     }
 
-    print('\n=== FIN DU DIAGNOSTIC ===\n');
+    debugPrint('\n=== FIN DU DIAGNOSTIC ===\n');
   }
 }
 

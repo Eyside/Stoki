@@ -459,7 +459,7 @@ class _CalorieTrackingScreenState extends ConsumerState<CalorieTrackingScreen> {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: (mealInfo['color'] as Color).withOpacity(0.1),
+            color: (mealInfo['color'] as Color).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(mealInfo['icon'] as IconData, color: mealInfo['color'] as Color),

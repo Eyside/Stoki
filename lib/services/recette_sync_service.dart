@@ -1,4 +1,5 @@
 // lib/services/recette_sync_service.dart
+import 'package:flutter/foundation.dart';
 import '../database.dart';
 import '../models/recette_firestore.dart';
 import '../repositories/recette_repository.dart';
@@ -36,12 +37,12 @@ class RecetteSyncService {
       throw Exception('Utilisateur non connecté');
     }
 
-    print('🔄 Synchronisation de la recette locale $localRecetteId vers le cloud...');
+    debugPrint('🔄 Synchronisation de la recette locale $localRecetteId vers le cloud...');
 
     // Vérifier si déjà synchronisée (cache)
     if (!forceSync && _syncedRecettes.containsKey(localRecetteId)) {
       final cloudId = _syncedRecettes[localRecetteId]!;
-      print('✅ Recette déjà synchronisée : $cloudId (depuis le cache)');
+      debugPrint('✅ Recette déjà synchronisée : $cloudId (depuis le cache)');
       return cloudId;
     }
 
@@ -51,11 +52,11 @@ class RecetteSyncService {
       throw Exception('Recette locale $localRecetteId introuvable');
     }
 
-    print('   📖 Recette trouvée : ${recette.name}');
+    debugPrint('   📖 Recette trouvée : ${recette.name}');
 
     // 2. Récupérer les ingrédients locaux
     final ingredients = await _recetteRepo.getIngredientsForRecette(localRecetteId);
-    print('   🥗 ${ingredients.length} ingrédients à synchroniser');
+    debugPrint('   🥗 ${ingredients.length} ingrédients à synchroniser');
 
     // 3. Créer la recette dans Firestore (toujours en privé pour les recettes locales)
     final cloudRecetteId = await _recetteCloudService.createRecette(
@@ -69,7 +70,7 @@ class RecetteSyncService {
       groupId: null,
     );
 
-    print('   ✅ Recette créée dans Firestore : $cloudRecetteId');
+    debugPrint('   ✅ Recette créée dans Firestore : $cloudRecetteId');
 
     // 4. Synchroniser les ingrédients
     for (final item in ingredients) {
@@ -77,7 +78,7 @@ class RecetteSyncService {
       final ingredient = item['ingredient'] as Ingredient?;
 
       if (ingredient == null) {
-        print('   ⚠️ Ingrédient ${ri.ingredientId} introuvable, ignoré');
+        debugPrint('   ⚠️ Ingrédient ${ri.ingredientId} introuvable, ignoré');
         continue;
       }
 
@@ -100,13 +101,13 @@ class RecetteSyncService {
         ingredient: cloudIngredient,
       );
 
-      print('   ✅ Ingrédient synchronisé : ${ingredient.name}');
+      debugPrint('   ✅ Ingrédient synchronisé : ${ingredient.name}');
     }
 
     // 5. Mettre en cache
     _syncedRecettes[localRecetteId] = cloudRecetteId;
 
-    print('🎉 Synchronisation terminée ! Local ID: $localRecetteId → Cloud ID: $cloudRecetteId');
+    debugPrint('🎉 Synchronisation terminée ! Local ID: $localRecetteId → Cloud ID: $cloudRecetteId');
 
     return cloudRecetteId;
   }
@@ -122,7 +123,7 @@ class RecetteSyncService {
       throw Exception('Utilisateur non connecté');
     }
 
-    print('🔄 Synchronisation de la recette locale $localRecetteId vers le groupe $groupId...');
+    debugPrint('🔄 Synchronisation de la recette locale $localRecetteId vers le groupe $groupId...');
 
     // 1. Récupérer la recette locale
     final recette = await _recetteRepo.getRecetteById(localRecetteId);
@@ -130,11 +131,11 @@ class RecetteSyncService {
       throw Exception('Recette locale $localRecetteId introuvable');
     }
 
-    print('   📖 Recette trouvée : ${recette.name}');
+    debugPrint('   📖 Recette trouvée : ${recette.name}');
 
     // 2. Récupérer les ingrédients locaux
     final ingredients = await _recetteRepo.getIngredientsForRecette(localRecetteId);
-    print('   🥗 ${ingredients.length} ingrédients à synchroniser');
+    debugPrint('   🥗 ${ingredients.length} ingrédients à synchroniser');
 
     // 3. Créer la recette dans Firestore (mode groupe)
     final cloudRecetteId = await _recetteCloudService.createRecette(
@@ -148,7 +149,7 @@ class RecetteSyncService {
       groupId: groupId,
     );
 
-    print('   ✅ Recette créée dans Firestore pour le groupe : $cloudRecetteId');
+    debugPrint('   ✅ Recette créée dans Firestore pour le groupe : $cloudRecetteId');
 
     // 4. Synchroniser les ingrédients
     for (final item in ingredients) {
@@ -156,7 +157,7 @@ class RecetteSyncService {
       final ingredient = item['ingredient'] as Ingredient?;
 
       if (ingredient == null) {
-        print('   ⚠️ Ingrédient ${ri.ingredientId} introuvable, ignoré');
+        debugPrint('   ⚠️ Ingrédient ${ri.ingredientId} introuvable, ignoré');
         continue;
       }
 
@@ -179,10 +180,10 @@ class RecetteSyncService {
         ingredient: cloudIngredient,
       );
 
-      print('   ✅ Ingrédient synchronisé : ${ingredient.name}');
+      debugPrint('   ✅ Ingrédient synchronisé : ${ingredient.name}');
     }
 
-    print('🎉 Synchronisation groupe terminée ! Local ID: $localRecetteId → Cloud ID: $cloudRecetteId');
+    debugPrint('🎉 Synchronisation groupe terminée ! Local ID: $localRecetteId → Cloud ID: $cloudRecetteId');
 
     return cloudRecetteId;
   }
@@ -200,7 +201,7 @@ class RecetteSyncService {
   /// Vide le cache de synchronisation
   void clearCache() {
     _syncedRecettes.clear();
-    print('🧹 Cache de synchronisation vidé');
+    debugPrint('🧹 Cache de synchronisation vidé');
   }
 
   /// Synchronise toutes les recettes locales vers le cloud (mode privé)
@@ -210,7 +211,7 @@ class RecetteSyncService {
       throw Exception('Utilisateur non connecté');
     }
 
-    print('🔄 Synchronisation de TOUTES les recettes locales...');
+    debugPrint('🔄 Synchronisation de TOUTES les recettes locales...');
 
     final allRecettes = await _recetteRepo.getAllRecettes();
     final results = <int, String>{};
@@ -223,11 +224,11 @@ class RecetteSyncService {
         );
         results[recette.id] = cloudId;
       } catch (e) {
-        print('❌ Erreur lors de la sync de ${recette.name}: $e');
+        debugPrint('❌ Erreur lors de la sync de ${recette.name}: $e');
       }
     }
 
-    print('🎉 Synchronisation globale terminée : ${results.length}/${allRecettes.length} recettes');
+    debugPrint('🎉 Synchronisation globale terminée : ${results.length}/${allRecettes.length} recettes');
 
     return results;
   }

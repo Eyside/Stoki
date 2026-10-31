@@ -1,6 +1,7 @@
 // lib/utils/firestore_structure_checker.dart
 // Script de diagnostic pour vérifier la structure Firestore
 
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FirestoreStructureChecker {
@@ -8,7 +9,7 @@ class FirestoreStructureChecker {
 
   /// Vérifie toute la structure Firestore de l'application
   Future<Map<String, dynamic>> checkCompleteStructure() async {
-    print('🔍 === VÉRIFICATION STRUCTURE FIRESTORE ===\n');
+    debugPrint('🔍 === VÉRIFICATION STRUCTURE FIRESTORE ===\n');
 
     final report = <String, dynamic>{};
 
@@ -24,17 +25,17 @@ class FirestoreStructureChecker {
     // 4. Vérifier les groupes
     report['groups'] = await _checkGroups();
 
-    print('\n=== FIN DE LA VÉRIFICATION ===');
+    debugPrint('\n=== FIN DE LA VÉRIFICATION ===');
     return report;
   }
 
   /// Vérifie les recettes et leurs ingrédients
   Future<Map<String, dynamic>> _checkRecettes() async {
-    print('📋 RECETTES:');
+    debugPrint('📋 RECETTES:');
 
     try {
       final recettesSnapshot = await _firestore.collection('recettes').get();
-      print('   → ${recettesSnapshot.docs.length} recette(s) trouvée(s)');
+      debugPrint('   → ${recettesSnapshot.docs.length} recette(s) trouvée(s)');
 
       int recettesWithIngredients = 0;
       int recettesWithoutIngredients = 0;
@@ -50,17 +51,17 @@ class FirestoreStructureChecker {
             .get();
 
         if (ingredientsSnapshot.docs.isEmpty) {
-          print('   ⚠️ "${recetteName}" (${recetteDoc.id}) : 0 ingrédients');
+          debugPrint('   ⚠️ "${recetteName}" (${recetteDoc.id}) : 0 ingrédients');
           recettesWithoutIngredients++;
         } else {
-          print('   ✅ "${recetteName}" (${recetteDoc.id}) : ${ingredientsSnapshot.docs.length} ingrédients');
+          debugPrint('   ✅ "${recetteName}" (${recetteDoc.id}) : ${ingredientsSnapshot.docs.length} ingrédients');
           recettesWithIngredients++;
           totalIngredients += ingredientsSnapshot.docs.length;
 
           // Afficher les ingrédients
           for (final ingDoc in ingredientsSnapshot.docs) {
             final ingData = ingDoc.data();
-            print('      - ${ingData['ingredientName']}: ${ingData['quantity']} ${ingData['unit']}');
+            debugPrint('      - ${ingData['ingredientName']}: ${ingData['quantity']} ${ingData['unit']}');
           }
         }
       }
@@ -72,18 +73,18 @@ class FirestoreStructureChecker {
         'totalIngredients': totalIngredients,
       };
     } catch (e) {
-      print('   ❌ Erreur: $e');
+      debugPrint('   ❌ Erreur: $e');
       return {'error': e.toString()};
     }
   }
 
   /// Vérifie les plannings
   Future<Map<String, dynamic>> _checkPlannings() async {
-    print('\n📅 PLANNINGS:');
+    debugPrint('\n📅 PLANNINGS:');
 
     try {
       final planningsSnapshot = await _firestore.collection('planning').get();
-      print('   → ${planningsSnapshot.docs.length} planning(s) trouvé(s)');
+      debugPrint('   → ${planningsSnapshot.docs.length} planning(s) trouvé(s)');
 
       int withValidRecette = 0;
       int withInvalidRecette = 0;
@@ -108,13 +109,13 @@ class FirestoreStructureChecker {
               .get();
 
           if (ingredientsSnapshot.docs.isEmpty) {
-            print('   ⚠️ ${date.day}/${date.month} $mealType: "$recetteName" existe mais SANS ingrédients');
+            debugPrint('   ⚠️ ${date.day}/${date.month} $mealType: "$recetteName" existe mais SANS ingrédients');
           } else {
-            print('   ✅ ${date.day}/${date.month} $mealType: "$recetteName" (${ingredientsSnapshot.docs.length} ingrédients)');
+            debugPrint('   ✅ ${date.day}/${date.month} $mealType: "$recetteName" (${ingredientsSnapshot.docs.length} ingrédients)');
             withValidRecette++;
           }
         } else {
-          print('   ❌ ${date.day}/${date.month} $mealType: Recette "$recetteName" ($recetteId) INTROUVABLE');
+          debugPrint('   ❌ ${date.day}/${date.month} $mealType: Recette "$recetteName" ($recetteId) INTROUVABLE');
           withInvalidRecette++;
         }
       }
@@ -125,18 +126,18 @@ class FirestoreStructureChecker {
         'withInvalidRecette': withInvalidRecette,
       };
     } catch (e) {
-      print('   ❌ Erreur: $e');
+      debugPrint('   ❌ Erreur: $e');
       return {'error': e.toString()};
     }
   }
 
   /// Vérifie les listes de courses
   Future<Map<String, dynamic>> _checkShoppingLists() async {
-    print('\n🛒 LISTES DE COURSES:');
+    debugPrint('\n🛒 LISTES DE COURSES:');
 
     try {
       final shoppingSnapshot = await _firestore.collection('shopping_list').get();
-      print('   → ${shoppingSnapshot.docs.length} article(s) trouvé(s)');
+      debugPrint('   → ${shoppingSnapshot.docs.length} article(s) trouvé(s)');
 
       int pending = 0;
       int completed = 0;
@@ -150,7 +151,7 @@ class FirestoreStructureChecker {
         else if (status == 'completed') completed++;
         else if (status == 'stored') stored++;
 
-        print('   - ${data['ingredientName'] ?? data['customName']}: ${data['quantity']} ${data['unit']} [$status]');
+        debugPrint('   - ${data['ingredientName'] ?? data['customName']}: ${data['quantity']} ${data['unit']} [$status]');
       }
 
       return {
@@ -160,18 +161,18 @@ class FirestoreStructureChecker {
         'stored': stored,
       };
     } catch (e) {
-      print('   ❌ Erreur: $e');
+      debugPrint('   ❌ Erreur: $e');
       return {'error': e.toString()};
     }
   }
 
   /// Vérifie les groupes
   Future<Map<String, dynamic>> _checkGroups() async {
-    print('\n👥 GROUPES:');
+    debugPrint('\n👥 GROUPES:');
 
     try {
       final groupsSnapshot = await _firestore.collection('groups').get();
-      print('   → ${groupsSnapshot.docs.length} groupe(s) trouvé(s)');
+      debugPrint('   → ${groupsSnapshot.docs.length} groupe(s) trouvé(s)');
 
       for (final groupDoc in groupsSnapshot.docs) {
         final groupData = groupDoc.data();
@@ -182,22 +183,22 @@ class FirestoreStructureChecker {
             .collection('members')
             .get();
 
-        print('   ✅ "$groupName" (${groupDoc.id}) : ${membersSnapshot.docs.length} membre(s)');
+        debugPrint('   ✅ "$groupName" (${groupDoc.id}) : ${membersSnapshot.docs.length} membre(s)');
       }
 
       return {
         'total': groupsSnapshot.docs.length,
       };
     } catch (e) {
-      print('   ❌ Erreur: $e');
+      debugPrint('   ❌ Erreur: $e');
       return {'error': e.toString()};
     }
   }
 
   /// Vérifie un planning spécifique et toutes ses dépendances
   Future<void> checkSpecificPlanning(String planningId) async {
-    print('🔍 === VÉRIFICATION PLANNING SPÉCIFIQUE ===\n');
-    print('Planning ID: $planningId\n');
+    debugPrint('🔍 === VÉRIFICATION PLANNING SPÉCIFIQUE ===\n');
+    debugPrint('Planning ID: $planningId\n');
 
     try {
       final planningDoc = await _firestore
@@ -206,56 +207,56 @@ class FirestoreStructureChecker {
           .get();
 
       if (!planningDoc.exists) {
-        print('❌ Planning introuvable!');
+        debugPrint('❌ Planning introuvable!');
         return;
       }
 
       final planningData = planningDoc.data()!;
-      print('📅 PLANNING:');
-      print('   Recette: ${planningData['recetteName']}');
-      print('   Type: ${planningData['mealType']}');
-      print('   Date: ${(planningData['date'] as Timestamp).toDate()}');
-      print('   RecetteId: ${planningData['recetteId']}');
+      debugPrint('📅 PLANNING:');
+      debugPrint('   Recette: ${planningData['recetteName']}');
+      debugPrint('   Type: ${planningData['mealType']}');
+      debugPrint('   Date: ${(planningData['date'] as Timestamp).toDate()}');
+      debugPrint('   RecetteId: ${planningData['recetteId']}');
 
       final recetteId = planningData['recetteId'];
 
       // Vérifier la recette
-      print('\n📋 RECETTE LIÉE:');
+      debugPrint('\n📋 RECETTE LIÉE:');
       final recetteDoc = await _firestore
           .collection('recettes')
           .doc(recetteId)
           .get();
 
       if (!recetteDoc.exists) {
-        print('   ❌ Recette introuvable dans Firestore!');
-        print('   💡 Le planning référence une recette qui n\'existe pas');
+        debugPrint('   ❌ Recette introuvable dans Firestore!');
+        debugPrint('   💡 Le planning référence une recette qui n\'existe pas');
         return;
       }
 
       final recetteData = recetteDoc.data()!;
-      print('   ✅ Recette trouvée: ${recetteData['name']}');
-      print('   Portions: ${recetteData['servings']}');
+      debugPrint('   ✅ Recette trouvée: ${recetteData['name']}');
+      debugPrint('   Portions: ${recetteData['servings']}');
 
       // Vérifier les ingrédients
-      print('\n🥗 INGRÉDIENTS:');
+      debugPrint('\n🥗 INGRÉDIENTS:');
       final ingredientsSnapshot = await recetteDoc.reference
           .collection('ingredients')
           .get();
 
       if (ingredientsSnapshot.docs.isEmpty) {
-        print('   ❌ Aucun ingrédient trouvé!');
-        print('   💡 La sous-collection "ingredients" est vide');
-        print('   💡 Vous devez ajouter des ingrédients à cette recette dans Firestore');
+        debugPrint('   ❌ Aucun ingrédient trouvé!');
+        debugPrint('   💡 La sous-collection "ingredients" est vide');
+        debugPrint('   💡 Vous devez ajouter des ingrédients à cette recette dans Firestore');
       } else {
-        print('   ✅ ${ingredientsSnapshot.docs.length} ingrédient(s) trouvé(s):');
+        debugPrint('   ✅ ${ingredientsSnapshot.docs.length} ingrédient(s) trouvé(s):');
         for (final ingDoc in ingredientsSnapshot.docs) {
           final ingData = ingDoc.data();
-          print('      - ${ingData['ingredientName']}: ${ingData['quantity']} ${ingData['unit']}');
+          debugPrint('      - ${ingData['ingredientName']}: ${ingData['quantity']} ${ingData['unit']}');
         }
       }
 
     } catch (e) {
-      print('❌ Erreur: $e');
+      debugPrint('❌ Erreur: $e');
     }
   }
 }

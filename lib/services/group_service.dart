@@ -66,7 +66,7 @@ class GroupService {
         'memberCount': 1,
       });
 
-      print('✅ Groupe créé: ${docRef.id}');
+      debugPrint('✅ Groupe créé: ${docRef.id}');
 
       // Ajouter le créateur comme administrateur
       await docRef.collection('members').doc(userId).set({
@@ -76,7 +76,7 @@ class GroupService {
         'joinedAt': FieldValue.serverTimestamp(),
       });
 
-      print('✅ Membre admin ajouté: $userId');
+      debugPrint('✅ Membre admin ajouté: $userId');
 
       await _writeInvite(
         code: inviteCode,
@@ -90,7 +90,7 @@ class GroupService {
 
       return docRef.id;
     } catch (e) {
-      print('❌ Erreur création groupe: $e');
+      debugPrint('❌ Erreur création groupe: $e');
       return null;
     }
   }
@@ -136,7 +136,7 @@ class GroupService {
 
       return true;
     } catch (e) {
-      print('❌ Erreur rejoindre groupe: $e');
+      debugPrint('❌ Erreur rejoindre groupe: $e');
       rethrow;
     }
   }
@@ -159,14 +159,14 @@ class GroupService {
         'inviteCode': invite.id,
       };
     } catch (e) {
-      print('❌ Erreur preview groupe: $e');
+      debugPrint('❌ Erreur preview groupe: $e');
       return null;
     }
   }
 
   // Récupérer les groupes d'un utilisateur - VERSION CORRIGÉE
   Stream<List<Map<String, dynamic>>> getUserGroups(String userId) {
-    print('🔍 getUserGroups appelé avec userId: $userId');
+    debugPrint('🔍 getUserGroups appelé avec userId: $userId');
 
     // On utilise collectionGroup pour chercher dans toutes les sous-collections 'members'
     return _firestore
@@ -174,7 +174,7 @@ class GroupService {
         .where('userId', isEqualTo: userId) // CORRECTION: on cherche par userId dans les données
         .snapshots()
         .asyncMap((snapshot) async {
-      print('🔍 Snapshot reçu avec ${snapshot.docs.length} documents');
+      debugPrint('🔍 Snapshot reçu avec ${snapshot.docs.length} documents');
 
       List<Map<String, dynamic>> groups = [];
 
@@ -184,11 +184,11 @@ class GroupService {
           final groupRef = memberDoc.reference.parent.parent;
 
           if (groupRef == null) {
-            print('⚠️ groupRef est null pour ${memberDoc.id}');
+            debugPrint('⚠️ groupRef est null pour ${memberDoc.id}');
             continue;
           }
 
-          print('🔍 Récupération du groupe: ${groupRef.id}');
+          debugPrint('🔍 Récupération du groupe: ${groupRef.id}');
           final groupDoc = await groupRef.get();
 
           if (groupDoc.exists) {
@@ -205,16 +205,16 @@ class GroupService {
               'createdAt': groupData['createdAt'],
             });
 
-            print('✅ Groupe ajouté: ${groupData['name']}');
+            debugPrint('✅ Groupe ajouté: ${groupData['name']}');
           } else {
-            print('⚠️ Le groupe ${groupRef.id} n\'existe pas');
+            debugPrint('⚠️ Le groupe ${groupRef.id} n\'existe pas');
           }
         } catch (e) {
-          print('❌ Erreur traitement document: $e');
+          debugPrint('❌ Erreur traitement document: $e');
         }
       }
 
-      print('✅ Total groupes trouvés: ${groups.length}');
+      debugPrint('✅ Total groupes trouvés: ${groups.length}');
       return groups;
     });
   }
@@ -231,7 +231,7 @@ class GroupService {
         ...doc.data()!,
       };
     } catch (e) {
-      print('❌ Erreur récupération groupe: $e');
+      debugPrint('❌ Erreur récupération groupe: $e');
       return null;
     }
   }
@@ -289,7 +289,7 @@ class GroupService {
         }
       }
     } catch (e) {
-      print('⚠️ Synchronisation de la fiche de membre: $e');
+      debugPrint('⚠️ Synchronisation de la fiche de membre: $e');
     }
   }
 
@@ -334,7 +334,7 @@ class GroupService {
 
       return true;
     } catch (e) {
-      print('❌ Erreur quitter groupe: $e');
+      debugPrint('❌ Erreur quitter groupe: $e');
       return false;
     }
   }
@@ -357,7 +357,7 @@ class GroupService {
 
       return true;
     } catch (e) {
-      print('❌ Erreur suppression groupe: $e');
+      debugPrint('❌ Erreur suppression groupe: $e');
       rethrow;
     }
   }
@@ -380,7 +380,7 @@ class GroupService {
 
       return true;
     } catch (e) {
-      print('❌ Erreur mise à jour groupe: $e');
+      debugPrint('❌ Erreur mise à jour groupe: $e');
       return false;
     }
   }
@@ -401,7 +401,7 @@ class GroupService {
         await _firestore.collection('invites').doc(code).delete();
       }
     } catch (e) {
-      print('⚠️ Suppression de la fiche d\'invitation: $e');
+      debugPrint('⚠️ Suppression de la fiche d\'invitation: $e');
     }
   }
 
@@ -435,7 +435,7 @@ class GroupService {
 
       return newCode;
     } catch (e) {
-      print('❌ Erreur régénération code: $e');
+      debugPrint('❌ Erreur régénération code: $e');
       return null;
     }
   }

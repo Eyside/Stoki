@@ -1,6 +1,7 @@
 // lib/services/ingredient_firestore_service.dart
 // Service cloud pour gérer les ingrédients dans Firestore
 
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/ingredient_firestore.dart';
 import 'auth_service.dart';
@@ -61,7 +62,7 @@ class IngredientFirestoreService {
     };
 
     final docRef = await _ingredientsCollection.add(data);
-    print('✅ Ingrédient ajouté: ${docRef.id}');
+    debugPrint('✅ Ingrédient ajouté: ${docRef.id}');
     return docRef.id;
   }
 
@@ -250,7 +251,7 @@ class IngredientFirestoreService {
     }
 
     await _ingredientsCollection.doc(id).delete();
-    print('✅ Ingrédient supprimé: $id');
+    debugPrint('✅ Ingrédient supprimé: $id');
   }
 
   // ============================================================================

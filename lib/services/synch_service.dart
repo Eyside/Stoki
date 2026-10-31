@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class GroupService {
@@ -20,7 +21,7 @@ class GroupService {
 
       return docRef.id;
     } catch (e) {
-      print('Erreur création groupe: $e');
+      debugPrint('Erreur création groupe: $e');
       return null;
     }
   }
@@ -39,7 +40,7 @@ class GroupService {
       });
       return true;
     } catch (e) {
-      print('Erreur rejoindre groupe: $e');
+      debugPrint('Erreur rejoindre groupe: $e');
       return false;
     }
   }

@@ -1,4 +1,5 @@
 // lib/services/shopping_list_cloud_service.dart
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/shopping_list_firestore.dart';
 import 'auth_service.dart';
@@ -73,7 +74,7 @@ class ShoppingListCloudService {
     };
 
     final docRef = await _shoppingCollection.add(data);
-    print('✅ Article ajouté à la liste cloud: ${docRef.id}');
+    debugPrint('✅ Article ajouté à la liste cloud: ${docRef.id}');
     return docRef.id;
   }
 
@@ -215,7 +216,7 @@ class ShoppingListCloudService {
   // ============================================================================
   Future<void> deleteItem(String itemId) async {
     await _shoppingCollection.doc(itemId).delete();
-    print('✅ Article supprimé: $itemId');
+    debugPrint('✅ Article supprimé: $itemId');
   }
 
   // ============================================================================
@@ -235,7 +236,7 @@ class ShoppingListCloudService {
       batch.delete(doc.reference);
     }
     await batch.commit();
-    print('✅ Articles complétés supprimés');
+    debugPrint('✅ Articles complétés supprimés');
   }
 
   // ============================================================================
@@ -255,7 +256,7 @@ class ShoppingListCloudService {
       batch.delete(doc.reference);
     }
     await batch.commit();
-    print('✅ Articles stockés supprimés');
+    debugPrint('✅ Articles stockés supprimés');
   }
 
   // ============================================================================
@@ -275,7 +276,7 @@ class ShoppingListCloudService {
       batch.delete(doc.reference);
     }
     await batch.commit();
-    print('✅ Articles auto-générés supprimés');
+    debugPrint('✅ Articles auto-générés supprimés');
   }
 
   // ============================================================================
@@ -295,7 +296,7 @@ class ShoppingListCloudService {
       batch.delete(doc.reference);
     }
     await batch.commit();
-    print('✅ Tous les articles personnels supprimés');
+    debugPrint('✅ Tous les articles personnels supprimés');
   }
 
   // ============================================================================
@@ -312,7 +313,7 @@ class ShoppingListCloudService {
       batch.delete(doc.reference);
     }
     await batch.commit();
-    print('✅ Tous les articles du groupe supprimés');
+    debugPrint('✅ Tous les articles du groupe supprimés');
   }
 
   // ============================================================================

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers.dart';
 import '../models/app_profile.dart';
+import '../services/account_deletion_service.dart';
 import '../services/profile_firestore_service.dart';
 
 class ProfilesScreen extends ConsumerStatefulWidget {
@@ -125,6 +126,55 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
         SnackBar(
           content: Text(wasNew ? 'Profil créé !' : 'Profil mis à jour !'),
           backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Supprimer mon compte ?'),
+        content: const Text(
+          'Votre profil, votre suivi calorique, vos repas planifiés, votre '
+          'stock privé, votre liste de courses et vos recettes privées seront '
+          'effacés définitivement. Vous quitterez tous vos groupes ; ce qui '
+          'appartient aux groupes (recettes et stock de groupe) y reste.\n\n'
+          'Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Supprimer définitivement'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _saving = true);
+    try {
+      await AccountDeletionService().deleteEverything();
+      if (!mounted) return;
+      // Le compte n'existe plus : retour à l'écran de connexion
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8),
         ),
       );
     }
@@ -325,6 +375,20 @@ class _ProfilesScreenState extends ConsumerState<ProfilesScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   padding: const EdgeInsets.all(16),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 8),
+            Center(
+              child: TextButton.icon(
+                onPressed: _saving ? null : _confirmDeleteAccount,
+                icon: const Icon(Icons.delete_forever, color: Colors.red),
+                label: const Text(
+                  'Supprimer mon compte et mes données',
+                  style: TextStyle(color: Colors.red),
                 ),
               ),
             ),
