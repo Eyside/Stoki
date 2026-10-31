@@ -27,7 +27,7 @@ Vos données privées ne sont visibles que de vous. Les éléments que vous plac
 
 ## Conservation et suppression
 
-Vos données sont conservées tant que votre compte existe. Vous pouvez supprimer votre compte et toutes vos données personnelles depuis l'application (Mon profil → Supprimer mon compte). Les recettes et stocks que vous avez placés dans un groupe restent à ce groupe ; vous quittez vos groupes lors de la suppression.
+Vos données sont conservées tant que votre compte existe. Vous pouvez supprimer votre compte et toutes vos données personnelles depuis l'application (Mon profil → Supprimer mon compte et mes données). Les recettes et stocks que vous avez placés dans un groupe restent à ce groupe ; vous quittez vos groupes lors de la suppression.
 
 ## Vos droits
 
