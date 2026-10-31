@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/app_profile.dart';
 import '../../models/planning_firestore.dart';
 import '../../models/recette_firestore.dart';
-import '../../providers.dart';
 import '../../services/planning_firestore_service.dart';
 import '../../services/recette_firestore_service.dart';
 import '../../services/auth_service.dart';

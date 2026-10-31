@@ -1,18 +1,15 @@
 // lib/screens/shopping_list_screen_new.dart (PARTIE 1/4 - CORRIGÉ)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../database.dart';
 import '../models/shopping_list_firestore.dart';
 import '../providers.dart';
 import '../repositories/shopping_list_repository.dart';
-import '../repositories/frigo_repository.dart';
 import '../services/shopping_list_cloud_service.dart';
 import '../services/shopping_list_generator_service.dart';
 import '../services/group_service.dart';
 import '../services/auth_service.dart';
 import '../utils/shopping_list_category_helper.dart';
 import '../models/frigo_firestore.dart'; // ✅ Pour FrigoVisibility
-import '../services/frigo_firestore_service.dart'; // ✅ Pour le service cloud
 
 
 /// Options de source pour la liste de courses
@@ -46,7 +43,6 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
   late ShoppingListCloudService _cloudService;
   late ShoppingListGeneratorService _generatorService;
   late ShoppingListRepository _localRepo;
-  late FrigoRepository _frigoRepo;
 
   List<ShoppingSourceOption> _sourceOptions = [];
   ShoppingSourceOption? _selectedSource;
@@ -62,7 +58,6 @@ class _ShoppingListScreenNewState extends ConsumerState<ShoppingListScreenNew> {
     _cloudService = ShoppingListCloudService();
     _generatorService = ref.read(shoppingListGeneratorServiceProvider);
     _localRepo = ShoppingListRepository(db);
-    _frigoRepo = ref.read(frigoRepositoryProvider);
     _loadSourceOptions();
   }
 

@@ -5,7 +5,6 @@ import '../../services/auth_service.dart';
 import '../../models/recette_firestore.dart';
 import 'recette_firestore_detail.dart';
 import 'recette_firestore_form.dart';
-import '../../providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum RecipeType {

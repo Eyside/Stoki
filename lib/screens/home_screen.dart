@@ -1,10 +1,25 @@
 // lib/screens/home_screen.dart
+// Accueil = résumé : suivi calorique de la semaine, prochains repas,
+// produits bientôt périmés.
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/app_profile.dart';
+import '../models/frigo_firestore.dart';
+import '../providers.dart';
 import '../services/auth_service.dart';
+import '../services/frigo_firestore_service.dart';
+import '../services/group_service.dart';
 import '../services/planning_firestore_service.dart';
-import 'group_stock_selection_screen.dart';
-import 'planning/group_planning_selection_screen.dart';
+import 'calorie_tracking_screen.dart';
+
+class _HomeData {
+  final AppProfile? profile;
+  final double weekCalories;
+  final List<Map<String, dynamic>> meals;
+  final List<FrigoFirestore> expiring;
+  const _HomeData(this.profile, this.weekCalories, this.meals, this.expiring);
+}
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -14,510 +29,423 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final _authService = AuthService();
   final _planningService = PlanningFirestoreService();
+  final _frigoService = FrigoFirestoreService();
+  final _groupService = GroupService();
+
+  late Future<_HomeData> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<void> _refresh() async {
+    final f = _load();
+    setState(() => _future = f);
+    await f;
+  }
+
+  Future<_HomeData> _load() async {
+    final profileService = ref.read(profileFirestoreServiceProvider);
+    final tracking = ref.read(calorieTrackingFirestoreServiceProvider);
+
+    AppProfile? profile;
+    try {
+      profile = await profileService.getMyProfile();
+    } catch (e) {
+      debugPrint('Accueil - profil: $e');
+    }
+
+    // Semaine en cours : lundi 00:00 -> dimanche 23:59
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final sunday = monday
+        .add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+
+    double weekCalories = 0;
+    try {
+      final entries = await tracking.getRange(monday, sunday);
+      weekCalories = entries.fold(0.0, (sum, e) => sum + e.calories);
+    } catch (e) {
+      debugPrint('Accueil - calories: $e');
+    }
+
+    List<Map<String, dynamic>> meals = [];
+    try {
+      meals = await _planningService.getUpcomingMeals(limit: 3).first;
+    } catch (e) {
+      debugPrint('Accueil - repas: $e');
+    }
+
+    final expiring = await _loadExpiring();
+    return _HomeData(profile, weekCalories, meals, expiring);
+  }
+
+  /// Produits de mon stock privé et des stocks de mes groupes qui expirent
+  /// dans les 7 jours (ou sont déjà périmés).
+  Future<List<FrigoFirestore>> _loadExpiring() async {
+    final items = <FrigoFirestore>[];
+    try {
+      final mine = await _frigoService.getAllMyStocks().first;
+      items.addAll(mine.where((i) => i.visibility == FrigoVisibility.private));
+
+      final uid = AuthService().currentUser?.uid;
+      if (uid != null) {
+        final groups = await _groupService.getUserGroups(uid).first;
+        for (final g in groups) {
+          items.addAll(await _frigoService.getGroupStock(g['id'] as String).first);
+        }
+      }
+    } catch (e) {
+      debugPrint('Accueil - stocks: $e');
+    }
+
+    final limit = DateTime.now().add(const Duration(days: 7));
+    final expiring = items
+        .where((i) => i.bestBefore != null && i.bestBefore!.isBefore(limit))
+        .toList()
+      ..sort((a, b) => a.bestBefore!.compareTo(b.bestBefore!));
+    return expiring;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final user = _authService.currentUser;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildWelcomeHeader(user?.displayName),
-          const SizedBox(height: 32),
-          const Text(
-            'Navigation rapide',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2D3748),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildMainButton(
-            context,
-            icon: Icons.inventory_2_rounded,
-            label: 'Stock',
-            subtitle: 'Gérer mes stocks',
-            gradient: const LinearGradient(
-              colors: [Color(0xFFB8E6D5), Color(0xFF95D9C3)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const GroupStockSelectionScreen(),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          _buildMainButton(
-            context,
-            icon: Icons.restaurant_menu_rounded,
-            label: 'Recettes',
-            subtitle: 'Explorer mes recettes',
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFFD6A5), Color(0xFFFFBE88)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            onTap: () {
-              Navigator.pushNamed(context, '/recipe-selection');
-            },
-          ),
-          const SizedBox(height: 16),
-          _buildMainButton(
-            context,
-            icon: Icons.calendar_month_rounded,
-            label: 'Planning',
-            subtitle: 'Organiser mes repas',
-            gradient: const LinearGradient(
-              colors: [Color(0xFFCAB8FF), Color(0xFFB19FE8)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const GroupPlanningSelectionScreen(),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 32),
-          _buildQuickScanSection(context),
-          const SizedBox(height: 32),
-          _buildUpcomingMeals(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWelcomeHeader(String? userName) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFF0F9FF), Color(0xFFE0F2FE)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.shade100.withValues(alpha: 0.5),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: FutureBuilder<_HomeData>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final data = snap.data;
+          if (data == null) {
+            return ListView(children: const [
+              SizedBox(height: 120),
+              Center(child: Text('Impossible de charger le résumé')),
+            ]);
+          }
+          return ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.waving_hand,
-              size: 40,
-              color: Color(0xFFFFA726),
-            ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Bonjour${userName != null ? ', $userName' : ''} !',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Gérez vos stocks intelligemment',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMainButton(
-      BuildContext context, {
-        required IconData icon,
-        required String label,
-        required String subtitle,
-        required Gradient gradient,
-        required VoidCallback onTap,
-      }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: gradient,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
+            children: [
+              _buildCalorieCard(data),
+              const SizedBox(height: 16),
+              _buildMealsCard(data.meals),
+              const SizedBox(height: 16),
+              _buildExpiringCard(data.expiring),
+              const SizedBox(height: 16),
             ],
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(icon, size: 36, color: const Color(0xFF1E293B)),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: const Color(0xFF1E293B).withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 20,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildQuickScanSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Action rapide',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF2D3748),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              Navigator.pushNamed(context, '/scan');
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: Ink(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFFC6D3), Color(0xFFFFB3C6)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.shade100.withValues(alpha: 0.5),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.qr_code_scanner_rounded,
-                        size: 32,
-                        color: Color(0xFFE91E63),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Scanner un produit',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E293B),
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Ajoutez rapidement au stock',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      size: 18,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  // ---------------------------------------------------------------------------
+  // CARTE CALORIES
+  // ---------------------------------------------------------------------------
 
-  Widget _buildUpcomingMeals() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Repas à venir',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2D3748),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const GroupPlanningSelectionScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.arrow_forward, size: 16),
-              label: const Text('Voir tout'),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF6366F1),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        StreamBuilder<List<Map<String, dynamic>>>(
-          stream: _planningService.getUpcomingMeals(limit: 3),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: CircularProgressIndicator(),
-                ),
-              );
-            }
-
-            if (snapshot.hasError) {
-              return _buildEmptyMealsCard('Erreur de chargement');
-            }
-
-            final meals = snapshot.data ?? [];
-
-            if (meals.isEmpty) {
-              return _buildEmptyMealsCard('Aucun repas planifié');
-            }
-
-            return Column(
-              children: meals.map((meal) => _buildMealCard(meal)).toList(),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyMealsCard(String message) {
+  Widget _card({required String title, IconData? icon, Widget? trailing, required Widget child}) {
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.event_busy_rounded, size: 32, color: Colors.grey.shade400),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                fontSize: 15,
-                color: Color(0xFF64748B),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMealCard(Map<String, dynamic> meal) {
-    final date = meal['date'] as DateTime?;
-    final mealType = meal['mealType'] as String? ?? '';
-    final recipeName = meal['recipeName'] as String? ?? 'Repas sans nom';
-    final servings = meal['servings'] as int? ?? 1;
-
-    final mealIcon = _getMealIcon(mealType);
-    final mealColor = _getMealColor(mealType);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: mealColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(mealIcon, size: 28, color: mealColor),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    recipeName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E293B),
-                    ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 18, color: const Color(0xFF64748B)),
+                const SizedBox(width: 6),
+              ],
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1E293B),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.calendar_today, size: 12, color: Colors.grey.shade600),
-                      const SizedBox(width: 4),
-                      Text(
-                        date != null ? _formatDate(date) : 'Date inconnue',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Icon(Icons.people_outline, size: 12, color: Colors.grey.shade600),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$servings pers.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: mealColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _getMealTypeLabel(mealType),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: mealColor,
                 ),
+              ),
+              if (trailing != null) trailing,
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalorieCard(_HomeData data) {
+    final profile = data.profile;
+
+    if (profile == null) {
+      return _card(
+        title: 'Suivi calorique',
+        icon: Icons.local_fire_department_rounded,
+        child: Column(
+          children: [
+            const Text(
+              'Créez votre profil pour suivre vos calories et votre objectif.',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () async {
+                  await Navigator.pushNamed(context, '/profiles');
+                  _refresh();
+                },
+                child: const Text('Créer mon profil'),
               ),
             ),
           ],
         ),
+      );
+    }
+
+    final weekTarget = profile.tdee * 7;
+    final progress = weekTarget <= 0 ? 0.0 : data.weekCalories / weekTarget;
+    final remaining = math.max(0.0, weekTarget - data.weekCalories);
+
+    return _card(
+      title: 'Cette semaine',
+      icon: Icons.local_fire_department_rounded,
+      trailing: TextButton(
+        style: TextButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+        ),
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CalorieTrackingScreen()),
+          );
+          _refresh();
+        },
+        child: const Text('Détails'),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 140,
+            height: 90,
+            child: CustomPaint(
+              painter: _ArcGaugePainter(
+                progress: progress,
+                color: progress > 1.0
+                    ? const Color(0xFFEF5350)
+                    : const Color(0xFF43A047),
+              ),
+              child: Align(
+                alignment: const Alignment(0, 0.55),
+                child: Text(
+                  '${(progress * 100).round()} %',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _stat('Consommé', '${data.weekCalories.round()} kcal'),
+                _stat('Objectif', '${weekTarget.round()} kcal'),
+                _stat('Restant', '${remaining.round()} kcal'),
+                _stat('Poids', '${_fmt(profile.weightKg)} kg'),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  Widget _stat(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E293B))),
+        ],
+      ),
+    );
+  }
+
+  String _fmt(double v) =>
+      v == v.roundToDouble() ? v.round().toString() : v.toStringAsFixed(1);
+
+  // ---------------------------------------------------------------------------
+  // PROCHAINS REPAS
+  // ---------------------------------------------------------------------------
+
+  Widget _buildMealsCard(List<Map<String, dynamic>> meals) {
+    return _card(
+      title: 'Prochains repas',
+      icon: Icons.restaurant_rounded,
+      child: meals.isEmpty
+          ? const Text('Aucun repas planifié.',
+              style: TextStyle(color: Color(0xFF64748B)))
+          : Column(
+              children: [for (final m in meals) _mealRow(m)],
+            ),
+    );
+  }
+
+  Widget _mealRow(Map<String, dynamic> meal) {
+    final mealType = meal['mealType'] as String? ?? '';
+    final color = _getMealColor(mealType);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(_getMealIcon(mealType), size: 18, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  meal['recipeName'] as String? ?? 'Repas',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  '${_formatDate(meal['date'] as DateTime)} · ${_getMealTypeLabel(mealType)}',
+                  style: const TextStyle(
+                      fontSize: 12, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // BIENTÔT PÉRIMÉS
+  // ---------------------------------------------------------------------------
+
+  Widget _buildExpiringCard(List<FrigoFirestore> items) {
+    final shown = items.take(8).toList();
+    return _card(
+      title: 'À consommer cette semaine',
+      icon: Icons.hourglass_bottom_rounded,
+      child: items.isEmpty
+          ? const Text('Rien ne périme dans les 7 prochains jours.',
+              style: TextStyle(color: Color(0xFF64748B)))
+          : Column(
+              children: [
+                for (final i in shown) _expiringRow(i),
+                if (items.length > shown.length)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text('+ ${items.length - shown.length} autres',
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF64748B))),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Widget _expiringRow(FrigoFirestore item) {
+    final today = DateTime.now();
+    final d0 = DateTime(today.year, today.month, today.day);
+    final b = item.bestBefore!;
+    final days = DateTime(b.year, b.month, b.day).difference(d0).inDays;
+
+    final String label;
+    final Color color;
+    if (days < 0) {
+      label = 'Périmé';
+      color = const Color(0xFFE53935);
+    } else if (days == 0) {
+      label = "Aujourd'hui";
+      color = const Color(0xFFE53935);
+    } else if (days == 1) {
+      label = 'Demain';
+      color = const Color(0xFFFB8C00);
+    } else {
+      label = 'Dans $days j';
+      color = const Color(0xFFF9A825);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              item.ingredientName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          Text(
+            '${_fmt(item.quantity)} ${item.unit}',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // OUTILS
+  // ---------------------------------------------------------------------------
 
   IconData _getMealIcon(String mealType) {
     switch (mealType.toLowerCase()) {
@@ -567,19 +495,54 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final targetDate = DateTime(date.year, date.month, date.day);
+    final target = DateTime(date.year, date.month, date.day);
 
-    if (targetDate == today) {
-      return "Aujourd'hui";
-    } else if (targetDate == today.add(const Duration(days: 1))) {
-      return "Demain";
-    } else {
-      final weekdays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-      final months = [
-        'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin',
-        'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'
-      ];
-      return '${weekdays[date.weekday - 1]} ${date.day} ${months[date.month - 1]}';
+    if (target == today) return "Aujourd'hui";
+    if (target == today.add(const Duration(days: 1))) return 'Demain';
+
+    const weekdays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    const months = [
+      'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin',
+      'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'
+    ];
+    return '${weekdays[date.weekday - 1]} ${date.day} ${months[date.month - 1]}';
+  }
+}
+
+/// Jauge en demi-cercle : fond gris + arc coloré proportionnel à [progress]
+/// (plafonné à 100 % pour le tracé).
+class _ArcGaugePainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _ArcGaugePainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 12.0;
+    final radius = math.min(size.width / 2, size.height) - stroke / 2;
+    final center = Offset(size.width / 2, size.height - stroke / 2);
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final base = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFFE2E8F0);
+    canvas.drawArc(rect, math.pi, math.pi, false, base);
+
+    final p = progress.clamp(0.0, 1.0);
+    if (p > 0) {
+      final fg = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.round
+        ..color = color;
+      canvas.drawArc(rect, math.pi, math.pi * p, false, fg);
     }
   }
+
+  @override
+  bool shouldRepaint(_ArcGaugePainter old) =>
+      old.progress != progress || old.color != color;
 }

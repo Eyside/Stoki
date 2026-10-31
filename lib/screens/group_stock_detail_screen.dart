@@ -12,7 +12,7 @@ import '../models/frigo_firestore.dart';
 import '../models/ingredient_firestore.dart';
 import '../utils/permission_helper.dart';
 
-enum StockType { all, private, group }
+enum StockType { private, group }
 
 class GroupStockDetailScreen extends StatefulWidget {
   final StockType stockType;
@@ -222,11 +222,11 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
           borderRadius: BorderRadius.circular(16),
           onTap: () => _showDetails(item),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(children: [
-              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: item.visibility == FrigoVisibility.private ? const Color(0xFFE0F2FE) : const Color(0xFFD1FAE5), borderRadius: BorderRadius.circular(12)), child: Icon(item.visibility == FrigoVisibility.private ? Icons.lock_outline : Icons.group_outlined, size: 24, color: item.visibility == FrigoVisibility.private ? const Color(0xFF0284C7) : const Color(0xFF059669))),
+              Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: item.visibility == FrigoVisibility.private ? const Color(0xFFE0F2FE) : const Color(0xFFD1FAE5), borderRadius: BorderRadius.circular(12)), child: Icon(item.visibility == FrigoVisibility.private ? Icons.lock_outline : Icons.group_outlined, size: 20, color: item.visibility == FrigoVisibility.private ? const Color(0xFF0284C7) : const Color(0xFF059669))),
               const SizedBox(width: 16),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item.ingredientName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)), const SizedBox(height: 6), Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)), child: Text('${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1)} ${item.unit}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))), if (item.bestBefore != null) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withValues(alpha: 0.3))), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.calendar_today, size: 12, color: color), const SizedBox(width: 4), Text(days! < 0 ? 'Périmé' : days == 0 ? 'Aujourd\'hui' : '$days j', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color))]))]])])),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item.ingredientName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)), const SizedBox(height: 3), Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)), child: Text('${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1)} ${item.unit}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))), if (item.bestBefore != null) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withValues(alpha: 0.3))), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.calendar_today, size: 12, color: color), const SizedBox(width: 4), Text(days! < 0 ? 'Périmé' : days == 0 ? 'Aujourd\'hui' : '$days j', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color))]))]])])),
               IconButton(icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)), onPressed: () => _delete(item)),
             ]),
           ),
@@ -241,7 +241,6 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
 
   Stream<List<FrigoFirestore>> _getStockStream() {
     switch (widget.stockType) {
-      case StockType.all: return _frigoService.getAllMyStocks();
       case StockType.private: return _frigoService.getMyStock().map((items) => items.where((i) => i.visibility == FrigoVisibility.private).toList());
       case StockType.group: return widget.groupId != null ? _frigoService.getGroupStock(widget.groupId!) : Stream.value([]);
     }

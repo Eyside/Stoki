@@ -3,8 +3,6 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/planning_firestore.dart';
-import '../models/recette_firestore.dart';
-import '../models/shopping_list_firestore.dart';
 import 'auth_service.dart';
 import 'package:flutter/foundation.dart';
 

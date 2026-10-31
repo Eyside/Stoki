@@ -3,7 +3,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/shopping_list_firestore.dart';
 import '../services/shopping_list_v2_generator_service.dart';
 import '../services/shopping_list_cloud_service.dart';
 import '../services/frigo_firestore_service.dart';

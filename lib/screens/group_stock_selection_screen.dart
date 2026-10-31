@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/group_service.dart';
+import '../models/frigo_firestore.dart';
 import '../services/frigo_firestore_service.dart';
 import 'group_stock_detail_screen.dart';
 
@@ -46,368 +47,165 @@ class _GroupStockSelectionScreenState extends State<GroupStockSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Choisir un stock'),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1E293B),
-      ),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-        onRefresh: () async => _loadGroups(),
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            // Carte "Tout le stock"
-            _buildStockCard(
-              context,
-              title: 'Tout le stock',
-              subtitle: 'Voir tous mes stocks',
-              icon: Icons.all_inclusive_rounded,
-              gradient: const LinearGradient(
-                colors: [Color(0xFFB8E6D5), Color(0xFF95D9C3)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              onTap: () => _navigateToStockDetail(
-                context,
-                stockType: StockType.all,
-                title: 'Tout le stock',
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Carte "Mon stock privé"
-            _buildStockCard(
-              context,
-              title: 'Mon stock privé',
-              subtitle: 'Visible uniquement par moi',
-              icon: Icons.lock_person_rounded,
-              gradient: const LinearGradient(
-                colors: [Color(0xFFBBDEFB), Color(0xFF90CAF9)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              onTap: () => _navigateToStockDetail(
-                context,
-                stockType: StockType.private,
-                title: 'Mon stock privé',
-              ),
-            ),
-
-            if (_userGroups.isNotEmpty) ...[
-              const SizedBox(height: 32),
-              const Text(
-                'Stocks de groupe',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D3748),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Cartes des groupes
-            ..._userGroups.asMap().entries.map((entry) {
-              final index = entry.key;
-              final group = entry.value;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: _buildGroupCard(context, group, index),
-              );
-            }),
-
-            const SizedBox(height: 16),
-
-            // Message si aucun groupe
-            if (_userGroups.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.group_add_rounded,
-                      size: 48,
-                      color: Colors.grey.shade400,
+              onRefresh: () async => _loadGroups(),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _stockTile(
+                    title: 'Mon stock privé',
+                    subtitle: 'Visible uniquement par moi',
+                    icon: Icons.lock_person_rounded,
+                    color: const Color(0xFF42A5F5),
+                    stream: _frigoService.getMyStock().map((items) => items
+                        .where((i) => i.visibility == FrigoVisibility.private)
+                        .toList()),
+                    onTap: () => _navigateToStockDetail(
+                      context,
+                      stockType: StockType.private,
+                      title: 'Mon stock privé',
                     ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Aucun groupe',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Créez ou rejoignez un groupe pour partager vos stocks',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF94A3B8),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStockCard(
-      BuildContext context, {
-        required String title,
-        required String subtitle,
-        required IconData icon,
-        required Gradient gradient,
-        required VoidCallback onTap,
-      }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: gradient,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(icon, size: 32, color: const Color(0xFF1E293B)),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
+                  if (_userGroups.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(4, 20, 4, 8),
+                      child: Text(
+                        'STOCKS DE GROUPE',
                         style: TextStyle(
-                          fontSize: 13,
-                          color: const Color(0xFF1E293B).withValues(alpha: 0.7),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8,
+                          color: Color(0xFF64748B),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 18,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGroupCard(BuildContext context, Map<String, dynamic> group, int index) {
-    final groupName = group['name'] ?? 'Groupe';
-    final groupId = group['id'] as String;
-    final memberCount = group['memberCount'] ?? 0;
-
-    // Couleurs pastelles variées pour les groupes
-    final gradients = [
-      const LinearGradient(
-        colors: [Color(0xFFFFE4B5), Color(0xFFFFD6A5)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      const LinearGradient(
-        colors: [Color(0xFFFFCDD2), Color(0xFFFF8A95)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      const LinearGradient(
-        colors: [Color(0xFFD1C4E9), Color(0xFFB39DDB)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      const LinearGradient(
-        colors: [Color(0xFFFFF9C4), Color(0xFFFFF176)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      const LinearGradient(
-        colors: [Color(0xFFB2DFDB), Color(0xFF80CBC4)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-    ];
-
-    final gradient = gradients[index % gradients.length];
-
-    return StreamBuilder<int>(
-      stream: _getGroupStockCount(groupId),
-      builder: (context, snapshot) {
-        final stockCount = snapshot.data ?? 0;
-
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => _navigateToStockDetail(
-              context,
-              stockType: StockType.group,
-              groupId: groupId,
-              title: groupName,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            child: Ink(
-              decoration: BoxDecoration(
-                gradient: gradient,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
+                    ),
+                    for (var i = 0; i < _userGroups.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _groupTile(_userGroups[i], i),
+                      ),
+                  ] else
+                    const Padding(
+                      padding: EdgeInsets.only(top: 24),
+                      child: Text(
+                        'Créez ou rejoignez un groupe pour partager un stock.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                      ),
+                    ),
                 ],
               ),
-              child: Container(
-                padding: const EdgeInsets.all(20),
+            ),
+    );
+  }
+
+  static const _groupColors = [
+    Color(0xFFFFA726),
+    Color(0xFFEF5350),
+    Color(0xFF7E57C2),
+    Color(0xFF26A69A),
+    Color(0xFFD4B106),
+  ];
+
+  Widget _groupTile(Map<String, dynamic> group, int index) {
+    final groupId = group['id'] as String;
+    final name = (group['name'] ?? 'Groupe') as String;
+    return _stockTile(
+      title: name,
+      subtitle: 'Stock partagé',
+      icon: Icons.group_rounded,
+      color: _groupColors[index % _groupColors.length],
+      stream: _frigoService.getGroupStock(groupId),
+      onTap: () => _navigateToStockDetail(
+        context,
+        stockType: StockType.group,
+        groupId: groupId,
+        title: name,
+      ),
+    );
+  }
+
+  /// Ligne compacte : icône, nom, nombre de produits et produits à consommer
+  /// dans les 3 jours.
+  Widget _stockTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required Stream<List<FrigoFirestore>> stream,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 20, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Icon(
-                            Icons.group_rounded,
-                            size: 28,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                groupName,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1E293B),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '$memberCount membre${memberCount > 1 ? 's' : ''}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: const Color(0xFF1E293B).withValues(alpha: 0.7),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            size: 18,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600),
                     ),
-                    if (stockCount > 0) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.inventory_2_rounded,
-                              size: 16,
-                              color: Color(0xFF1E293B),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '$stockCount produit${stockCount > 1 ? 's' : ''} en stock',
+                    StreamBuilder<List<FrigoFirestore>>(
+                      stream: stream,
+                      builder: (context, snap) {
+                        final items = snap.data;
+                        if (items == null) {
+                          return Text(subtitle,
                               style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1E293B),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                                  fontSize: 12, color: Color(0xFF64748B)));
+                        }
+                        final soon = DateTime.now().add(const Duration(days: 3));
+                        final expiring = items
+                            .where((i) =>
+                                i.bestBefore != null &&
+                                i.bestBefore!.isBefore(soon))
+                            .length;
+                        final count =
+                            '${items.length} produit${items.length > 1 ? 's' : ''}';
+                        return Text(
+                          expiring > 0 ? '$count · $expiring à consommer vite' : count,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: expiring > 0
+                                ? const Color(0xFFE65100)
+                                : const Color(0xFF64748B),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
-            ),
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
-  }
-
-  Stream<int> _getGroupStockCount(String groupId) {
-    return _frigoService.getGroupStock(groupId).map((items) => items.length);
   }
 
   void _navigateToStockDetail(

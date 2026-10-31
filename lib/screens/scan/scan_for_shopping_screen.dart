@@ -7,7 +7,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../providers.dart';
 import '../../services/openfoodfacts_service.dart';
-import '../../services/ingredient_firestore_service.dart';
 import '../../models/ingredient_firestore.dart';
 import '../../utils/permission_helper.dart';
 

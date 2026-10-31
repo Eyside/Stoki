@@ -1,7 +1,6 @@
 // lib/widgets/edit_planned_meal_dialog.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../database.dart';
 import '../models/recette_firestore.dart';
 import 'dart:convert';
 

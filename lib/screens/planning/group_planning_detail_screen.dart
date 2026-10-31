@@ -9,7 +9,6 @@ import '../../services/planning_firestore_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/recette_firestore_service.dart';
 import '../../widgets/planning_detail_dialog.dart';
-import '../../models/recette_firestore.dart';
 import 'planning_form_screen.dart';
 import '../../services/meal_consumption_service.dart';
 import '../../widgets/consume_meal_dialog.dart';

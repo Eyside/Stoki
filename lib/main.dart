@@ -15,7 +15,6 @@ import 'screens/groups/groups_screen.dart';
 import 'screens/ingredient_cloud_screen.dart'; // ✅ NOUVEAU
 import 'screens/auth/auth_wrapper.dart';
 import 'services/auth_service.dart';
-import 'providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
