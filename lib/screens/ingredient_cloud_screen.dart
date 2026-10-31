@@ -4,8 +4,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ingredient_firestore.dart';
-import '../services/ingredient_firestore_service.dart';
-import '../services/auth_service.dart';
 import '../providers.dart';
 import 'scan/scan_screen.dart';
 

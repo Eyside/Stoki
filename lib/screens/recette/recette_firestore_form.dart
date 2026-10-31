@@ -2,9 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/recette_firestore.dart';
-import '../../models/ingredient_firestore.dart';
 import '../../services/recette_firestore_service.dart';
-import '../../services/auth_service.dart';
 import '../../widgets/ingredient_picker_cloud_widget.dart';
 import 'recette_firestore_detail.dart';
 
@@ -36,7 +34,6 @@ class _RecetteFirestoreFormState extends ConsumerState<RecetteFirestoreForm> {
   final _notesCtrl = TextEditingController();
 
   final _recetteService = RecetteFirestoreService();
-  final _authService = AuthService();
 
   late RecetteVisibility _visibility;
   String? _selectedCategory;

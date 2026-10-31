@@ -32,7 +32,6 @@ final ingredientRepositoryProvider = Provider<IngredientRepository>((ref) {
 
 // ⚠️ CONSERVÉ pour compatibilité mais ne devrait plus être utilisé
 final frigoRepositoryProvider = Provider<FrigoRepository>((ref) {
-  final db = ref.watch(databaseProvider);
   return FrigoRepository();
 });
 
