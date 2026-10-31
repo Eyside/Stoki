@@ -158,8 +158,9 @@ class _RecetteFirestoreDetailState extends ConsumerState<RecetteFirestoreDetail>
               );
 
               if (confirm == true) {
+                final navigator = Navigator.of(context);
                 await _recetteService.deleteRecette(widget.recetteId);
-                if (mounted) Navigator.pop(context);
+                navigator.pop();
               }
             },
           ),

@@ -128,6 +128,7 @@ class _GroupStockDetailScreenState extends State<GroupStockDetailScreen> {
       return;
     }
 
+    if (!mounted) return;
     final product = await Navigator.push<OpenFoodFactsProduct>(context, MaterialPageRoute(builder: (_) => _BarcodeScannerScreen()));
     if (product == null || !mounted) return;
 

@@ -510,12 +510,11 @@ class _RecetteDetailScreenState extends State<RecetteDetailScreen> {
           IconButton(
             icon: const Icon(Icons.copy),
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
               await widget.recetteRepository.duplicateRecette(_currentRecette.id);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Recette dupliquée !")),
-                );
-              }
+              messenger.showSnackBar(
+                const SnackBar(content: Text("Recette dupliquée !")),
+              );
             },
           ),
           IconButton(
@@ -540,8 +539,9 @@ class _RecetteDetailScreenState extends State<RecetteDetailScreen> {
                 ),
               );
               if (should == true) {
+                final navigator = Navigator.of(context);
                 await widget.recetteRepository.deleteRecette(_currentRecette.id);
-                if (mounted) Navigator.pop(context);
+                navigator.pop();
               }
             },
           ),
